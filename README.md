@@ -57,10 +57,10 @@ TEST environments may later be created dynamically by CI/CD.
 - [x] Upgrade Proxmox VE 7.4 -> 8.4
 - [x] Upgrade Proxmox VE 8.4 -> 9.2
 - [x] Upgrade Debian 11 -> 12 -> 13
-- [ ] Create infrastructure repository
-- [ ] Configure Terraform provider
-- [ ] Create Proxmox API user/token
-- [ ] Create first VM using Terraform
+- [x] Create infrastructure repository
+- [x] Configure Terraform provider
+- [x] Create Proxmox API user/token
+- [x] Create first VM using Terraform
 - [ ] Create Cloud-Init VM template
 - [ ] Introduce Ansible
 - [ ] Create DEV environment
