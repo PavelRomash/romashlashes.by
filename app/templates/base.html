@@ -1,0 +1,83 @@
+{% load static %}
+<!doctype html>
+<html lang="ru-BY">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4eee8">
+  <meta name="format-detection" content="telephone=no">
+
+  <title>{% block title %}Наращивание ресниц в Витебске | Ресницы и брови — romash.lashes{% endblock %}</title>
+
+  {% block meta %}
+  <meta name="description" content="Наращивание ресниц в Витебске, ламинирование ресниц и бровей, коррекция и окрашивание бровей у мастера Полины Ромаш. Цены 25–60 BYN. Витебск, проспект Фрунзе, 64. Онлайн-запись.">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+  <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+  {% endblock %}
+
+  <link rel="icon" href="{% static 'assets/favicon.ico' %}" sizes="any">
+  <link rel="icon" href="{% static 'assets/favicon.svg' %}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{% static 'assets/apple-touch-icon.png' %}">
+  <link rel="preload" as="image" href="{% static 'assets/hero.webp' %}" type="image/webp">
+
+  {% block social_meta %}{% endblock %}
+
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  {% block structured_data %}{% endblock %}
+</head>
+<body>
+  <div class="scroll-progress" aria-hidden="true"><span id="scrollProgress"></span></div>
+
+  <header class="site-header" id="header">
+    <div class="container header-inner">
+      <a class="brand magnetic" href="{% url 'home' %}#top" aria-label="romash.lashes — ресницы и брови в Витебске">
+        <img class="brand-mark" src="{% static 'assets/brand-eye.svg' %}" alt="" width="48" height="32" aria-hidden="true">
+        <span class="brand-copy"><strong>romash.lashes</strong><small>ресницы • брови</small></span>
+      </a>
+      <nav class="desktop-nav" aria-label="Основная навигация">
+        <a href="{% url 'home' %}#services">Услуги</a>
+        <a href="{% url 'home' %}#works">Работы</a>
+        <a href="{% url 'home' %}#about">О мастере</a>
+        <a href="{% url 'home' %}#location">Адрес</a>
+        <a href="{% url 'home' %}#faq">FAQ</a>
+      </nav>
+      <a class="button button-small magnetic" href="{% url 'home' %}#booking" data-human-action="dikidi" target="_blank" rel="noopener">Записаться</a>
+    </div>
+  </header>
+
+  {% block content %}{% endblock %}
+
+  <footer>
+    <div class="container footer-inner">
+      <div>
+        <a class="brand" href="{% url 'home' %}#top" aria-label="romash.lashes — на главную">
+          <img class="brand-mark" src="{% static 'assets/brand-eye.svg' %}" alt="" width="48" height="32" aria-hidden="true">
+          <span class="brand-copy"><strong>romash.lashes</strong><small>ресницы • брови</small></span>
+        </a>
+        <p>Ресницы и брови · Витебск</p>
+        <p class="footer-legal">Исполнитель: Ромаш Полина Андреевна<br>Плательщик налога на профессиональный доход<br>УНП CE6471839 · ИМНС: 363, Инспекция МНС по Октябрьскому району г. Витебска</p>
+        <p class="copyright">© <span id="year"></span> Ромаш Полина Андреевна</p>
+      </div>
+      <div class="footer-links">
+        <a href="{% url 'home' %}#services">Услуги</a>
+        <a href="{% url 'home' %}#works">Работы</a>
+        <a href="{% url 'home' %}#location">Адрес и карта</a>
+        <a href="{% url 'home' %}#booking">Запись</a>
+        <a href="{% url 'home' %}#booking" data-human-action="dikidi" target="_blank" rel="noopener">DIKIDI ↗</a>
+        <a href="{% url 'home' %}#booking" data-human-action="instagram" target="_blank" rel="noopener">Instagram ↗</a>
+        <a href="{% url 'home' %}#booking" data-human-action="telegram" target="_blank" rel="noopener">Telegram ↗</a>
+        <a href="{% url 'home' %}#booking" data-human-action="viber">Viber{% if site_settings and site_settings.viber_phone %} {{ site_settings.viber_phone }}{% endif %} ↗</a>
+        <a href="/privacy/">Персональные данные и конфиденциальность</a>
+      </div>
+    </div>
+  </footer>
+
+  <a class="mobile-book" href="{% url 'home' %}#booking" data-human-action="dikidi" target="_blank" rel="noopener"><span>Записаться в DIKIDI</span><b>↗</b></a>
+
+  <div class="human-action-toast" id="humanActionToast" role="status" aria-live="polite"></div>
+  {% block overlays %}{% endblock %}
+
+  <script src="{% static 'js/app.js' %}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

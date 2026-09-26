@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+app/.venv/
+
+# Secrets
+app/.env
+
+# Django generated files
+app/staticfiles/
+app/media/
+app/db.sqlite3
+
+# macOS
+.DS_Store
+
+# Legacy migration source
+legacy-site/
