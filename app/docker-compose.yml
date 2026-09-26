@@ -8,9 +8,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
-    ports:
-      - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -22,5 +19,53 @@ services:
       timeout: 5s
       retries: 10
 
+    restart: unless-stopped
+
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: romashlashes-web
+
+    env_file:
+      - .env
+
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+
+    restart: unless-stopped
+
+
+  nginx:
+    image: nginx:1.29-alpine
+    container_name: romashlashes-nginx
+
+    depends_on:
+      - web
+
+    ports:
+      - "8080:80"
+
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+
+    restart: unless-stopped
+
+
 volumes:
   postgres_data:
+  static_volume:
+  media_volume:
