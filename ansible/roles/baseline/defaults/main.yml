@@ -1,0 +1,14 @@
+---
+baseline_packages:
+  - curl
+  - wget
+  - git
+  - ca-certificates
+  - jq
+  - vim
+  - htop
+  - unzip
+  - chrony
+
+baseline_timezone: Europe/Amsterdam
+baseline_locale: C.UTF-8

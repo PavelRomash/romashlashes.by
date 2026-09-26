@@ -156,10 +156,10 @@ TEST environments may later be created dynamically by CI/CD.
 
 ### Configuration management
 
-- [ ] Introduce Ansible
-- [ ] Create Ansible inventory for DEV / STAGE / PROD
-- [ ] Configure baseline OS settings with Ansible
-- [ ] Install common system packages
+- [x] Introduce Ansible
+- [x] Create Ansible inventory for DEV / STAGE / PROD
+- [x] Configure baseline OS settings with Ansible
+- [x] Install common system packages
 - [ ] Automate server configuration
 
 ### Containers and orchestration
