@@ -24,21 +24,26 @@ variables:
 django-check:
   stage: test
   image: python:3.14-slim
+
   tags:
     - docker
     - dev
+
   services:
     - name: postgres:17
       alias: postgres
+
   before_script:
     - cd app
     - python --version
     - pip install --no-cache-dir -r requirements.txt
+
   script:
     - python manage.py check
     - python manage.py migrate --noinput
     - python manage.py makemigrations --check --dry-run
     - python manage.py test
+
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       changes:
@@ -50,18 +55,77 @@ django-check:
         - ansible/roles/app_deploy/**/*
         - .gitlab-ci.yml
 
-deploy-dev:
-  stage: deploy
-  image: python:3.14-slim
+terraform-check:
+  stage: test
+  image:
+    name: hashicorp/terraform:latest
+    entrypoint: [""]
+
   tags:
     - docker
     - dev
-  needs:
-    - django-check
+
+  before_script:
+    - cd terraform/proxmox
+    - terraform version
+
+  script:
+    - terraform fmt -check -recursive
+    - terraform init -backend=false
+    - terraform validate
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - terraform/**/*
+        - .gitlab-ci.yml
+
+ansible-check:
+  stage: test
+  image: python:3.14-slim
+
+  tags:
+    - docker
+    - dev
+
+  before_script:
+    - pip install --no-cache-dir ansible ansible-lint
+    - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
+    - export ANSIBLE_ROLES_PATH="$CI_PROJECT_DIR/ansible/roles"
+    - cd "$CI_PROJECT_DIR/ansible"
+    - ansible --version
+
+  script:
+    - ansible-lint
+    - >
+      for playbook in playbooks/*.yml; do
+        echo "Syntax check: $playbook";
+        ansible-playbook
+        -i inventory/hosts.yml
+        "$playbook"
+        --syntax-check
+        --vault-password-file "$ANSIBLE_VAULT_PASSWORD";
+      done
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - ansible/**/*
+        - .gitlab-ci.yml
+
+deploy-dev:
+  stage: deploy
+  image: python:3.14-slim
+
+  tags:
+    - docker
+    - dev
+
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends openssh-client git curl
     - pip install --no-cache-dir ansible
+
     - mkdir -p ~/.ssh
     - tr -d '\r' < "$ANSIBLE_SSH_PRIVATE_KEY" > ~/.ssh/romashlashes-ci
     - printf '\n' >> ~/.ssh/romashlashes-ci
@@ -69,8 +133,10 @@ deploy-dev:
     - ssh-keygen -y -f ~/.ssh/romashlashes-ci > /dev/null
     - ssh-keyscan -H 192.168.0.185 >> ~/.ssh/known_hosts
     - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci
+
     - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
     - export ANSIBLE_ROLES_PATH="$CI_PROJECT_DIR/ansible/roles"
+
   script:
     - cd "$CI_PROJECT_DIR/ansible"
     - >
@@ -78,6 +144,7 @@ deploy-dev:
       -i inventory/hosts.yml
       playbooks/deploy-dev.yml
       --vault-password-file "$ANSIBLE_VAULT_PASSWORD"
+
     - >
       curl
       --fail
@@ -87,6 +154,7 @@ deploy-dev:
       --resolve dev.romashlashes.test:443:192.168.0.185
       https://dev.romashlashes.test/
       --output /dev/null
+
     - >
       curl
       --fail
@@ -96,6 +164,7 @@ deploy-dev:
       --resolve dev.romashlashes.test:443:192.168.0.185
       https://dev.romashlashes.test/static/css/styles.css
       --output /dev/null
+
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       changes:
