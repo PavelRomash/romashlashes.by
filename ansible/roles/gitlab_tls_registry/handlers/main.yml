@@ -1,0 +1,10 @@
+---
+- name: Update CA certificates
+  ansible.builtin.command:
+    cmd: update-ca-certificates
+  changed_when: true
+
+- name: Reconfigure GitLab
+  ansible.builtin.command:
+    cmd: gitlab-ctl reconfigure
+  changed_when: true

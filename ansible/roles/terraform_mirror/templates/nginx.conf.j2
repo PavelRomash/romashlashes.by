@@ -1,0 +1,48 @@
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name mirror.romashlashes.test;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name mirror.romashlashes.test;
+
+    ssl_certificate     /etc/nginx/certs/mirror.romashlashes.test.pem;
+    ssl_certificate_key /etc/nginx/certs/mirror.romashlashes.test-key.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    root /var/www/terraform-mirror;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location /providers/ {
+        autoindex off;
+        try_files $uri =404;
+
+        types {
+            application/json json;
+            application/zip zip;
+        }
+
+        default_type application/octet-stream;
+    }
+}

@@ -28,3 +28,6 @@ app/nginx/certs/*.key
 # Terraform local state
 *.tfstate
 *.tfstate.*
+
+# Terraform mirror TLS certificates
+ansible/roles/terraform_mirror/files/certs/

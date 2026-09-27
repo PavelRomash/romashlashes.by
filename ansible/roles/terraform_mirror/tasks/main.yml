@@ -1,0 +1,116 @@
+---
+- name: Install nginx
+  ansible.builtin.apt:
+    name:
+      - nginx
+    state: present
+    update_cache: true
+
+- name: Create Terraform mirror root directory
+  ansible.builtin.file:
+    path: "{{ terraform_mirror_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Terraform provider directory
+  ansible.builtin.file:
+    path: >-
+      {{ terraform_mirror_root }}/{{ terraform_provider_hostname }}/{{ terraform_provider_namespace }}/{{ terraform_provider_type }}
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download and verify Terraform provider packages
+  ansible.builtin.get_url:
+    url: "{{ terraform_provider_release_base_url }}/{{ item.value.filename }}"
+    dest: >-
+      {{ terraform_mirror_root }}/{{ terraform_provider_hostname }}/{{ terraform_provider_namespace }}/{{ terraform_provider_type }}/{{ item.value.filename }}
+    checksum: "sha256:{{ item.value.sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ terraform_provider_packages | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Create provider versions index
+  ansible.builtin.template:
+    src: provider-index.json.j2
+    dest: >-
+      {{ terraform_mirror_root }}/{{ terraform_provider_hostname }}/{{ terraform_provider_namespace }}/{{ terraform_provider_type }}/index.json
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create provider package index
+  ansible.builtin.template:
+    src: provider-version.json.j2
+    dest: >-
+      {{ terraform_mirror_root }}/{{ terraform_provider_hostname }}/{{ terraform_provider_namespace }}/{{ terraform_provider_type }}/{{ terraform_provider_version }}.json
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create nginx certificate directory
+  ansible.builtin.file:
+    path: /etc/nginx/certs
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy Terraform mirror TLS certificate
+  ansible.builtin.copy:
+    src: certs/mirror.romashlashes.test.pem
+    dest: /etc/nginx/certs/mirror.romashlashes.test.pem
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Copy Terraform mirror TLS private key
+  ansible.builtin.copy:
+    src: certs/mirror.romashlashes.test-key.pem
+    dest: /etc/nginx/certs/mirror.romashlashes.test-key.pem
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart nginx
+  no_log: true
+
+- name: Configure nginx for Terraform mirror
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/sites-available/terraform-mirror
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Enable Terraform mirror nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/terraform-mirror
+    dest: /etc/nginx/sites-enabled/terraform-mirror
+    state: link
+    force: true
+  notify: Restart nginx
+
+- name: Disable default nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Restart nginx
+
+- name: Validate nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+
+- name: Ensure nginx is enabled and started
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

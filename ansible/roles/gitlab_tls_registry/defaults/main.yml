@@ -1,0 +1,11 @@
+---
+gitlab_external_url: "https://gitlab.romashlashes.test"
+gitlab_registry_external_url: "https://registry.romashlashes.test"
+
+gitlab_tls_cert_src: "{{ inventory_dir }}/../.secrets/gitlab/gitlab-registry.crt"
+gitlab_tls_key_src: "{{ inventory_dir }}/../.secrets/gitlab/gitlab-registry.key"
+gitlab_internal_ca_src: "{{ inventory_dir }}/../.secrets/gitlab/romashlashes-rootCA.crt"
+
+gitlab_tls_cert_dest: "/etc/gitlab/ssl/gitlab-registry.crt"
+gitlab_tls_key_dest: "/etc/gitlab/ssl/gitlab-registry.key"
+gitlab_internal_ca_dest: "/usr/local/share/ca-certificates/romashlashes-rootCA.crt"

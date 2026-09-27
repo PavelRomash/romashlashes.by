@@ -1,0 +1,7 @@
+---
+- name: Configure GitLab HTTPS and Container Registry
+  hosts: gitlab
+  become: true
+
+  roles:
+    - gitlab_tls_registry

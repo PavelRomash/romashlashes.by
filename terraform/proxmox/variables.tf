@@ -38,5 +38,11 @@ variable "environments" {
       disk   = 50
     }
 
+    mirror = {
+      cores  = 1
+      memory = 512
+      disk   = 20
+    }
+
   }
 }

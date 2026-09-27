@@ -1,0 +1,7 @@
+---
+- name: Configure Terraform provider mirror
+  hosts: mirror
+  become: true
+
+  roles:
+    - terraform_mirror

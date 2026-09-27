@@ -1,0 +1,12 @@
+{
+  "archives": {
+{% for platform, package in terraform_provider_packages.items() %}
+    "{{ platform }}": {
+      "url": "{{ package.filename }}",
+      "hashes": [
+        "zh:{{ package.sha256 }}"
+      ]
+    }{% if not loop.last %},{% endif %}
+{% endfor %}
+  }
+}

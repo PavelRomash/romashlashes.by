@@ -1,0 +1,108 @@
+---
+- name: Create GitLab SSL directory
+  ansible.builtin.file:
+    path: /etc/gitlab/ssl
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy GitLab and Registry TLS certificate
+  ansible.builtin.copy:
+    src: "{{ gitlab_tls_cert_src }}"
+    dest: "{{ gitlab_tls_cert_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconfigure GitLab
+
+- name: Copy GitLab and Registry TLS private key
+  ansible.builtin.copy:
+    src: "{{ gitlab_tls_key_src }}"
+    dest: "{{ gitlab_tls_key_dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Reconfigure GitLab
+
+- name: Install internal CA certificate
+  ansible.builtin.copy:
+    src: "{{ gitlab_internal_ca_src }}"
+    dest: "{{ gitlab_internal_ca_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Update CA certificates
+
+- name: Configure GitLab external HTTPS URL
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^external_url\s'
+    line: 'external_url "{{ gitlab_external_url }}"'
+    create: false
+  notify: Reconfigure GitLab
+
+- name: Disable GitLab Let's Encrypt integration
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^letsencrypt\[''enable''\]'
+    line: "letsencrypt['enable'] = false"
+    insertafter: EOF
+  notify: Reconfigure GitLab
+
+- name: Enable HTTP to HTTPS redirect for GitLab
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^gitlab_rails\[''nginx''\]\[''redirect_http_to_https''\]'
+    line: "gitlab_rails['nginx']['redirect_http_to_https'] = true"
+    insertafter: EOF
+  notify: Reconfigure GitLab
+
+- name: Configure GitLab TLS certificate path
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^gitlab_rails\[''nginx''\]\[''ssl_certificate''\]'
+    line: "gitlab_rails['nginx']['ssl_certificate'] = '{{ gitlab_tls_cert_dest }}'"
+    insertafter: EOF
+  notify: Reconfigure GitLab
+
+- name: Configure GitLab TLS private key path
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^gitlab_rails\[''nginx''\]\[''ssl_certificate_key''\]'
+    line: "gitlab_rails['nginx']['ssl_certificate_key'] = '{{ gitlab_tls_key_dest }}'"
+    insertafter: EOF
+  notify: Reconfigure GitLab
+
+- name: Configure Container Registry external URL
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^registry_external_url\s'
+    line: 'registry_external_url "{{ gitlab_registry_external_url }}"'
+    insertafter: EOF
+  notify: Reconfigure GitLab
+
+- name: Configure Registry TLS certificate path
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^registry_nginx\[''ssl_certificate''\]'
+    line: "registry_nginx['ssl_certificate'] = '{{ gitlab_tls_cert_dest }}'"
+    insertafter: EOF
+  notify: Reconfigure GitLab
+
+- name: Configure Registry TLS private key path
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^registry_nginx\[''ssl_certificate_key''\]'
+    line: "registry_nginx['ssl_certificate_key'] = '{{ gitlab_tls_key_dest }}'"
+    insertafter: EOF
+  notify: Reconfigure GitLab
+
+- name: Apply pending handlers before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify GitLab services
+  ansible.builtin.command:
+    cmd: gitlab-ctl status
+  changed_when: false
