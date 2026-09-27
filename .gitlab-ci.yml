@@ -99,14 +99,14 @@ ansible-check:
 
   script:
     - ansible-lint
-    - >
+    - |
       for playbook in playbooks/*.yml; do
-        echo "Syntax check: $playbook";
-        ansible-playbook
-        -i inventory/hosts.yml
-        "$playbook"
-        --syntax-check
-        --vault-password-file "$ANSIBLE_VAULT_PASSWORD";
+        echo "Syntax check: $playbook"
+        ansible-playbook \
+          -i inventory/hosts.yml \
+          "$playbook" \
+          --syntax-check \
+          --vault-password-file "$ANSIBLE_VAULT_PASSWORD"
       done
 
   rules:
