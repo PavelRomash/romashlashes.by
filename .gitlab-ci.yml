@@ -60,7 +60,10 @@ deploy-dev:
     - apt-get install -y --no-install-recommends openssh-client git
     - pip install --no-cache-dir ansible
     - mkdir -p ~/.ssh
+    - test -n "$ANSIBLE_SSH_PRIVATE_KEY" || (echo "ANSIBLE_SSH_PRIVATE_KEY is missing" && exit 1)
+    - test -f "$ANSIBLE_SSH_PRIVATE_KEY" || (echo "ANSIBLE_SSH_PRIVATE_KEY file does not exist" && exit 1)
     - tr -d '\r' < "$ANSIBLE_SSH_PRIVATE_KEY" > ~/.ssh/romashlashes-ci
+    - printf '\n' >> ~/.ssh/romashlashes-ci
     - chmod 600 ~/.ssh/romashlashes-ci
     - ssh-keygen -y -f ~/.ssh/romashlashes-ci > /dev/null
     - ssh-keyscan -H 192.168.0.185 >> ~/.ssh/known_hosts
