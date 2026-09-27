@@ -57,7 +57,7 @@ deploy-dev:
 
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends openssh-client git
+    - apt-get install -y --no-install-recommends openssh-client git curl
     - pip install --no-cache-dir ansible
 
     - mkdir -p ~/.ssh
@@ -78,6 +78,26 @@ deploy-dev:
       -i inventory/hosts.yml
       playbooks/deploy-dev.yml
       --vault-password-file "$ANSIBLE_VAULT_PASSWORD"
+
+    - >
+      curl
+      --fail
+      --silent
+      --show-error
+      --insecure
+      --resolve dev.romashlashes.test:443:192.168.0.185
+      https://dev.romashlashes.test/
+      --output /dev/null
+
+    - >
+      curl
+      --fail
+      --silent
+      --show-error
+      --insecure
+      --resolve dev.romashlashes.test:443:192.168.0.185
+      https://dev.romashlashes.test/static/css/styles.css
+      --output /dev/null
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
