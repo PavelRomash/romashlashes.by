@@ -14,6 +14,39 @@
     owner: root
     group: root
 
+- name: Create TLS certificate directory
+  ansible.builtin.file:
+    path: "{{ app_deploy_path }}/nginx/certs"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy DEV TLS certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../.secrets/dev-tls/dev.romashlashes.test.pem"
+    dest: "{{ app_deploy_path }}/nginx/certs/dev.romashlashes.test.pem"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Copy DEV TLS private key
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../.secrets/dev-tls/dev.romashlashes.test-key.pem"
+    dest: "{{ app_deploy_path }}/nginx/certs/dev.romashlashes.test-key.pem"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Configure DEV nginx
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ app_deploy_path }}/nginx/default.conf"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Create application environment file
   ansible.builtin.template:
     src: env.j2
@@ -33,20 +66,36 @@
     wait: true
     wait_timeout: 180
 
-- name: Check application homepage
+
+- name: Check HTTP to HTTPS redirect
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ app_http_port }}/"
     method: GET
-    status_code: 200
-    return_content: false
-  register: app_homepage
+    status_code: 301
+    follow_redirects: none
+  register: http_redirect
   retries: 10
   delay: 3
-  until: app_homepage.status == 200
+  until: http_redirect.status == 301
 
-- name: Check static CSS
+- name: Check HTTPS application homepage
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ app_http_port }}/static/css/styles.css"
+    url: "https://127.0.0.1:{{ app_https_port }}/"
     method: GET
+    headers:
+      Host: "{{ app_server_name }}"
     status_code: 200
-    return_content: false
+    validate_certs: false
+  register: https_homepage
+  retries: 10
+  delay: 3
+  until: https_homepage.status == 200
+
+- name: Check HTTPS static CSS
+  ansible.builtin.uri:
+    url: "https://127.0.0.1:{{ app_https_port }}/static/css/styles.css"
+    method: GET
+    headers:
+      Host: "{{ app_server_name }}"
+    status_code: 200
+    validate_certs: false

@@ -18,3 +18,9 @@ app/db.sqlite3
 
 # Legacy migration source
 legacy-site/
+# Local development TLS certificates
+ansible/.secrets/
+
+# Runtime TLS certificates
+app/nginx/certs/*.pem
+app/nginx/certs/*.key
