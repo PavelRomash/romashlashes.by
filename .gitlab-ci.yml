@@ -57,17 +57,25 @@ deploy-dev:
 
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends openssh-client git
+    - apt-get install -y --no-install-recommends openssh-client git openssl
     - pip install --no-cache-dir ansible
+
     - mkdir -p ~/.ssh
-    - test -n "$ANSIBLE_SSH_PRIVATE_KEY" || (echo "ANSIBLE_SSH_PRIVATE_KEY is missing" && exit 1)
-    - test -f "$ANSIBLE_SSH_PRIVATE_KEY" || (echo "ANSIBLE_SSH_PRIVATE_KEY file does not exist" && exit 1)
     - tr -d '\r' < "$ANSIBLE_SSH_PRIVATE_KEY" > ~/.ssh/romashlashes-ci
     - printf '\n' >> ~/.ssh/romashlashes-ci
     - chmod 600 ~/.ssh/romashlashes-ci
     - ssh-keygen -y -f ~/.ssh/romashlashes-ci > /dev/null
     - ssh-keyscan -H 192.168.0.185 >> ~/.ssh/known_hosts
     - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci
+
+    - mkdir -p "$CI_PROJECT_DIR/ansible/.secrets/dev-tls"
+    - tr -d '\r' < "$DEV_TLS_CERT" > "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test.pem"
+    - tr -d '\r' < "$DEV_TLS_KEY" > "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test-key.pem"
+    - chmod 644 "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test.pem"
+    - chmod 600 "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test-key.pem"
+    - openssl x509 -in "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test.pem" -noout -subject
+    - openssl pkey -in "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test-key.pem" -noout
+
     - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
     - export ANSIBLE_ROLES_PATH="$CI_PROJECT_DIR/ansible/roles"
 
