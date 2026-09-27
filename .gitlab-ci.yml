@@ -57,7 +57,7 @@ deploy-dev:
 
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends openssh-client git openssl
+    - apt-get install -y --no-install-recommends openssh-client git
     - pip install --no-cache-dir ansible
 
     - mkdir -p ~/.ssh
@@ -68,20 +68,17 @@ deploy-dev:
     - ssh-keyscan -H 192.168.0.185 >> ~/.ssh/known_hosts
     - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci
 
-    - mkdir -p "$CI_PROJECT_DIR/ansible/.secrets/dev-tls"
-    - tr -d '\r' < "$DEV_TLS_CERT" > "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test.pem"
-    - tr -d '\r' < "$DEV_TLS_KEY" > "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test-key.pem"
-    - chmod 644 "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test.pem"
-    - chmod 600 "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test-key.pem"
-    - openssl x509 -in "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test.pem" -noout -subject
-    - openssl pkey -in "$CI_PROJECT_DIR/ansible/.secrets/dev-tls/dev.romashlashes.test-key.pem" -noout
-
     - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
     - export ANSIBLE_ROLES_PATH="$CI_PROJECT_DIR/ansible/roles"
 
   script:
     - cd "$CI_PROJECT_DIR/ansible"
-    - ansible-playbook
+    - >
+      ansible-playbook
       -i inventory/hosts.yml
       playbooks/deploy-dev.yml
       --vault-password-file "$ANSIBLE_VAULT_PASSWORD"
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual

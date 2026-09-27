@@ -14,31 +14,6 @@
     owner: root
     group: root
 
-- name: Create TLS certificate directory
-  ansible.builtin.file:
-    path: "{{ app_deploy_path }}/nginx/certs"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Copy DEV TLS certificate
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../.secrets/dev-tls/dev.romashlashes.test.pem"
-    dest: "{{ app_deploy_path }}/nginx/certs/dev.romashlashes.test.pem"
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Copy DEV TLS private key
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../.secrets/dev-tls/dev.romashlashes.test-key.pem"
-    dest: "{{ app_deploy_path }}/nginx/certs/dev.romashlashes.test-key.pem"
-    owner: root
-    group: root
-    mode: "0600"
-  no_log: true
-
 - name: Configure DEV nginx
   ansible.builtin.template:
     src: nginx.conf.j2
