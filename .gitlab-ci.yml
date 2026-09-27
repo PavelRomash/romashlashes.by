@@ -58,7 +58,7 @@ django-check:
 terraform-check:
   stage: test
   image:
-    name: hashicorp/terraform:latest
+    name: registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.0
     entrypoint: [""]
 
   tags:
@@ -78,6 +78,7 @@ terraform-check:
     - if: '$CI_COMMIT_BRANCH == "main"'
       changes:
         - terraform/**/*
+        - ci/terraform/**/*
         - .gitlab-ci.yml
 
 ansible-check:

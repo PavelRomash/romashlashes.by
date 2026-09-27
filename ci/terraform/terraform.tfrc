@@ -1,0 +1,10 @@
+provider_installation {
+  network_mirror {
+    url     = "https://mirror.romashlashes.test/providers/"
+    include = ["registry.terraform.io/bpg/proxmox"]
+  }
+
+  direct {
+    exclude = ["registry.terraform.io/bpg/proxmox"]
+  }
+}
