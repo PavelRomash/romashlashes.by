@@ -4,7 +4,7 @@
   gather_facts: false
 
   tasks:
-    - name: Create application archive from Git
+    - name: Create application archive from Git  # noqa command-instead-of-module
       ansible.builtin.command:
         cmd: >
           git archive

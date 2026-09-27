@@ -1,4 +1,4 @@
 ---
 app_deploy_path: /opt/romashlashes
 app_deploy_archive: /tmp/romashlashes-app.tar.gz
-app_http_port: 8080
+app_deploy_http_port: 8080

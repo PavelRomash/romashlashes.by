@@ -1,12 +1,12 @@
 ---
 terraform_mirror_root: /var/www/terraform-mirror/providers
 
-terraform_provider_hostname: registry.terraform.io
-terraform_provider_namespace: bpg
-terraform_provider_type: proxmox
-terraform_provider_version: "0.114.0"
+terraform_mirror_provider_hostname: registry.terraform.io
+terraform_mirror_provider_namespace: bpg
+terraform_mirror_provider_type: proxmox
+terraform_mirror_provider_version: "0.114.0"
 
-terraform_provider_packages:
+terraform_mirror_provider_packages:
   linux_amd64:
     filename: "terraform-provider-proxmox_0.114.0_linux_amd64.zip"
     sha256: "4f95e0060fb2585303f1216d3b6bd8cb7054a391dd04e3ff7b014088edd15a2c"
@@ -15,5 +15,11 @@ terraform_provider_packages:
     filename: "terraform-provider-proxmox_0.114.0_darwin_arm64.zip"
     sha256: "f3d26d1866f068661835eeeb4ff8bcc5b08aaf1630a4c0868b31c3511367fd07"
 
-terraform_provider_release_base_url: >-
-  https://github.com/bpg/terraform-provider-proxmox/releases/download/v{{ terraform_provider_version }}
+terraform_mirror_provider_base_path: >-
+  {{ terraform_mirror_root ~ '/' ~
+     terraform_mirror_provider_hostname ~ '/' ~
+     terraform_mirror_provider_namespace ~ '/' ~
+     terraform_mirror_provider_type }}
+
+terraform_mirror_provider_release_base_url: >-
+  https://github.com/bpg/terraform-provider-proxmox/releases/download/v{{ terraform_mirror_provider_version }}

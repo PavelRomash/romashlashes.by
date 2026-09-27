@@ -1,6 +1,6 @@
 {
   "archives": {
-{% for platform, package in terraform_provider_packages.items() %}
+{% for platform, package in terraform_mirror_provider_packages.items() %}
     "{{ platform }}": {
       "url": "{{ package.filename }}",
       "hashes": [

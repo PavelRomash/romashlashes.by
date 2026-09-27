@@ -31,3 +31,6 @@ app/nginx/certs/*.key
 
 # Terraform mirror TLS certificates
 ansible/roles/terraform_mirror/files/certs/
+
+# Local Ansible dependencies
+ansible/.ansible/

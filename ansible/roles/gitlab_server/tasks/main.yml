@@ -28,7 +28,7 @@
     state: present
     update_cache: true
   environment:
-    EXTERNAL_URL: "{{ gitlab_external_url }}"
+    EXTERNAL_URL: "{{ gitlab_server_external_url }}"
 
 - name: Ensure GitLab is reconfigured
   ansible.builtin.command:

@@ -91,6 +91,7 @@ ansible-check:
 
   before_script:
     - pip install --no-cache-dir ansible ansible-lint
+    - ansible-galaxy collection install -r "$CI_PROJECT_DIR/ansible/requirements.yml"
     - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
     - export ANSIBLE_ROLES_PATH="$CI_PROJECT_DIR/ansible/roles"
     - cd "$CI_PROJECT_DIR/ansible"

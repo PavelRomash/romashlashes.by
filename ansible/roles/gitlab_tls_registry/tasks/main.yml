@@ -9,8 +9,8 @@
 
 - name: Copy GitLab and Registry TLS certificate
   ansible.builtin.copy:
-    src: "{{ gitlab_tls_cert_src }}"
-    dest: "{{ gitlab_tls_cert_dest }}"
+    src: "{{ gitlab_tls_registry_cert_src }}"
+    dest: "{{ gitlab_tls_registry_cert_dest }}"
     owner: root
     group: root
     mode: "0644"
@@ -18,8 +18,8 @@
 
 - name: Copy GitLab and Registry TLS private key
   ansible.builtin.copy:
-    src: "{{ gitlab_tls_key_src }}"
-    dest: "{{ gitlab_tls_key_dest }}"
+    src: "{{ gitlab_tls_registry_key_src }}"
+    dest: "{{ gitlab_tls_registry_key_dest }}"
     owner: root
     group: root
     mode: "0600"
@@ -28,8 +28,8 @@
 
 - name: Install internal CA certificate
   ansible.builtin.copy:
-    src: "{{ gitlab_internal_ca_src }}"
-    dest: "{{ gitlab_internal_ca_dest }}"
+    src: "{{ gitlab_tls_registry_ca_src }}"
+    dest: "{{ gitlab_tls_registry_ca_dest }}"
     owner: root
     group: root
     mode: "0644"
@@ -39,7 +39,7 @@
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
     regexp: '^external_url\s'
-    line: 'external_url "{{ gitlab_external_url }}"'
+    line: 'external_url "{{ gitlab_tls_registry_gitlab_url }}"'
     create: false
   notify: Reconfigure GitLab
 
@@ -63,7 +63,7 @@
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
     regexp: '^gitlab_rails\[''nginx''\]\[''ssl_certificate''\]'
-    line: "gitlab_rails['nginx']['ssl_certificate'] = '{{ gitlab_tls_cert_dest }}'"
+    line: "gitlab_rails['nginx']['ssl_certificate'] = '{{ gitlab_tls_registry_cert_dest }}'"
     insertafter: EOF
   notify: Reconfigure GitLab
 
@@ -71,7 +71,7 @@
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
     regexp: '^gitlab_rails\[''nginx''\]\[''ssl_certificate_key''\]'
-    line: "gitlab_rails['nginx']['ssl_certificate_key'] = '{{ gitlab_tls_key_dest }}'"
+    line: "gitlab_rails['nginx']['ssl_certificate_key'] = '{{ gitlab_tls_registry_key_dest }}'"
     insertafter: EOF
   notify: Reconfigure GitLab
 
@@ -79,7 +79,7 @@
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
     regexp: '^registry_external_url\s'
-    line: 'registry_external_url "{{ gitlab_registry_external_url }}"'
+    line: 'registry_external_url "{{ gitlab_tls_registry_registry_url }}"'
     insertafter: EOF
   notify: Reconfigure GitLab
 
@@ -87,7 +87,7 @@
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
     regexp: '^registry_nginx\[''ssl_certificate''\]'
-    line: "registry_nginx['ssl_certificate'] = '{{ gitlab_tls_cert_dest }}'"
+    line: "registry_nginx['ssl_certificate'] = '{{ gitlab_tls_registry_cert_dest }}'"
     insertafter: EOF
   notify: Reconfigure GitLab
 
@@ -95,7 +95,7 @@
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
     regexp: '^registry_nginx\[''ssl_certificate_key''\]'
-    line: "registry_nginx['ssl_certificate_key'] = '{{ gitlab_tls_key_dest }}'"
+    line: "registry_nginx['ssl_certificate_key'] = '{{ gitlab_tls_registry_key_dest }}'"
     insertafter: EOF
   notify: Reconfigure GitLab
 

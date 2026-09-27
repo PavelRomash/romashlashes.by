@@ -44,14 +44,14 @@
 
 - name: Check HTTP to HTTPS redirect
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ app_http_port }}/"
+    url: "http://127.0.0.1:{{ app_deploy_http_port }}/"
     method: GET
     status_code: 301
     follow_redirects: none
-  register: http_redirect
+  register: app_deploy_http_redirect
   retries: 10
   delay: 3
-  until: http_redirect.status == 301
+  until: app_deploy_http_redirect.status == 301
 
 - name: Check HTTPS application homepage
   ansible.builtin.uri:
@@ -61,10 +61,10 @@
       Host: "{{ app_server_name }}"
     status_code: 200
     validate_certs: false
-  register: https_homepage
+  register: app_deploy_https_homepage
   retries: 10
   delay: 3
-  until: https_homepage.status == 200
+  until: app_deploy_https_homepage.status == 200
 
 - name: Check HTTPS static CSS
   ansible.builtin.uri:
