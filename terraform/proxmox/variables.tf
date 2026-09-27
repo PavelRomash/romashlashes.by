@@ -25,5 +25,12 @@ variable "environments" {
       memory = 2048
       disk   = 20
     }
+
+    ci = {
+      cores  = 2
+      memory = 2048
+      disk   = 20
+    }
+
   }
 }

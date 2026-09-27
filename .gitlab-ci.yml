@@ -1,0 +1,15 @@
+stages:
+  - test
+
+runner-check:
+  stage: test
+  image: debian:13-slim
+
+  tags:
+    - docker
+    - dev
+
+  script:
+    - echo "GitLab Runner works"
+    - cat /etc/os-release
+    - uname -a
