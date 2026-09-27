@@ -1,5 +1,6 @@
 stages:
   - test
+  - deploy
 
 variables:
   DJANGO_SECRET_KEY: "ci-only-secret-key-not-for-production"
@@ -22,7 +23,6 @@ variables:
 
 django-check:
   stage: test
-
   image: python:3.14-slim
 
   tags:
@@ -43,3 +43,32 @@ django-check:
     - python manage.py migrate --noinput
     - python manage.py makemigrations --check --dry-run
     - python manage.py test
+
+deploy-dev:
+  stage: deploy
+  image: python:3.14-slim
+
+  tags:
+    - docker
+    - dev
+
+  needs:
+    - django-check
+
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends openssh-client git
+    - pip install --no-cache-dir ansible
+    - mkdir -p ~/.ssh
+    - cp "$ANSIBLE_SSH_PRIVATE_KEY" ~/.ssh/romashlashes-ci
+    - chmod 600 ~/.ssh/romashlashes-ci
+    - ssh-keyscan -H 192.168.0.185 >> ~/.ssh/known_hosts
+    - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci
+
+  script:
+    - cd ansible
+    - ansible-playbook playbooks/deploy-dev.yml --vault-password-file "$ANSIBLE_VAULT_PASSWORD"
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
