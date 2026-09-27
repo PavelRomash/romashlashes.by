@@ -24,3 +24,7 @@ ansible/.secrets/
 # Runtime TLS certificates
 app/nginx/certs/*.pem
 app/nginx/certs/*.key
+
+# Terraform local state
+*.tfstate
+*.tfstate.*
