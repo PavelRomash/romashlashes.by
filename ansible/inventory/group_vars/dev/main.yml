@@ -17,9 +17,9 @@ app_django_allowed_hosts:
 app_django_csrf_trusted_origins:
   - "https://dev.romashlashes.test"
 
-app_django_secure_ssl_redirect: false
-app_django_session_cookie_secure: false
-app_django_csrf_cookie_secure: false
+app_django_secure_ssl_redirect: true
+app_django_session_cookie_secure: true
+app_django_csrf_cookie_secure: true
 
 app_django_secure_hsts_seconds: 0
 app_django_secure_hsts_include_subdomains: false
