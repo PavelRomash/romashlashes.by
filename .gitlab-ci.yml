@@ -60,8 +60,9 @@ deploy-dev:
     - apt-get install -y --no-install-recommends openssh-client git
     - pip install --no-cache-dir ansible
     - mkdir -p ~/.ssh
-    - cp "$ANSIBLE_SSH_PRIVATE_KEY" ~/.ssh/romashlashes-ci
+    - printf '%s' "$ANSIBLE_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/romashlashes-ci
     - chmod 600 ~/.ssh/romashlashes-ci
+    - ssh-keygen -y -f ~/.ssh/romashlashes-ci > /dev/null
     - ssh-keyscan -H 192.168.0.185 >> ~/.ssh/known_hosts
     - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci
     - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
