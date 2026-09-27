@@ -273,3 +273,7 @@ git push
 ```
 
 Автоматический deploy в `main` включим после стабилизации pipeline и backup/rollback процесса.
+
+## Проверка rules:changes
+
+Этот commit изменяет только документацию и не должен запускать Django CI.
