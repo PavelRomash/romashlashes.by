@@ -1,0 +1,36 @@
+---
+- name: Install GitLab prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - openssh-server
+      - tzdata
+      - perl
+    state: present
+    update_cache: true
+
+- name: Download GitLab repository setup script
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
+    dest: /tmp/gitlab-ce-repository.sh
+    mode: "0755"
+
+- name: Configure GitLab CE repository
+  ansible.builtin.command:
+    cmd: /tmp/gitlab-ce-repository.sh
+  args:
+    creates: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+
+- name: Install GitLab CE
+  ansible.builtin.apt:
+    name: gitlab-ce
+    state: present
+    update_cache: true
+  environment:
+    EXTERNAL_URL: "{{ gitlab_external_url }}"
+
+- name: Ensure GitLab is reconfigured
+  ansible.builtin.command:
+    cmd: gitlab-ctl reconfigure
+  changed_when: true

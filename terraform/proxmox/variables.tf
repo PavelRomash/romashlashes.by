@@ -32,5 +32,11 @@ variable "environments" {
       disk   = 20
     }
 
+    gitlab = {
+      cores  = 4
+      memory = 8192
+      disk   = 50
+    }
+
   }
 }
