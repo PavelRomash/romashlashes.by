@@ -1,15 +1,45 @@
 stages:
   - test
 
-runner-check:
+variables:
+  DJANGO_SECRET_KEY: "ci-only-secret-key-not-for-production"
+  DJANGO_DEBUG: "False"
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+  DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost"
+
+  POSTGRES_DB: "romashlashes_ci"
+  POSTGRES_USER: "romashlashes_ci"
+  POSTGRES_PASSWORD: "romashlashes_ci_password"
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+
+  DJANGO_SECURE_SSL_REDIRECT: "False"
+  DJANGO_SESSION_COOKIE_SECURE: "False"
+  DJANGO_CSRF_COOKIE_SECURE: "False"
+  DJANGO_SECURE_HSTS_SECONDS: "0"
+  DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS: "False"
+  DJANGO_SECURE_HSTS_PRELOAD: "False"
+
+django-check:
   stage: test
-  image: debian:13-slim
+
+  image: python:3.14-slim
 
   tags:
     - docker
     - dev
 
+  services:
+    - name: postgres:17
+      alias: postgres
+
+  before_script:
+    - cd app
+    - python --version
+    - pip install --no-cache-dir -r requirements.txt
+
   script:
-    - echo "GitLab Runner works"
-    - cat /etc/os-release
-    - uname -a
+    - python manage.py check
+    - python manage.py migrate --noinput
+    - python manage.py makemigrations --check --dry-run
+    - python manage.py test
