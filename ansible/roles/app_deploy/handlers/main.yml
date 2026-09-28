@@ -1,0 +1,8 @@
+---
+- name: Recreate nginx container
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_deploy_path }}"
+    services:
+      - nginx
+    state: present
+    recreate: always
