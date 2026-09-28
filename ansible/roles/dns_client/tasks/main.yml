@@ -42,7 +42,7 @@
 
 - name: Resolve compatibility GitLab name
   ansible.builtin.command:
-    cmd: getent ahostsv4 gitlab.romashlashes.test
+    cmd: getent ahostsv4 gitlab.int.romashlashes.by
   register: dns_client_gitlab_lookup
   changed_when: false
 
