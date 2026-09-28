@@ -64,8 +64,8 @@
 
 - name: Copy Terraform mirror TLS certificate
   ansible.builtin.copy:
-    src: certs/mirror.romashlashes.test.pem
-    dest: /etc/nginx/certs/mirror.romashlashes.test.pem
+    src: "{{ terraform_mirror_tls_cert_src }}"
+    dest: "{{ terraform_mirror_tls_cert_dest }}"
     owner: root
     group: root
     mode: "0644"
@@ -73,8 +73,8 @@
 
 - name: Copy Terraform mirror TLS private key
   ansible.builtin.copy:
-    src: certs/mirror.romashlashes.test-key.pem
-    dest: /etc/nginx/certs/mirror.romashlashes.test-key.pem
+    src: "{{ terraform_mirror_tls_key_src }}"
+    dest: "{{ terraform_mirror_tls_key_dest }}"
     owner: root
     group: root
     mode: "0600"

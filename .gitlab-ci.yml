@@ -58,7 +58,7 @@ django-check:
 terraform-check:
   stage: test
   image:
-    name: registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.0
+    name: registry.int.romashlashes.by/romashlashes/romashlashes.by/terraform-ci:1.0.0
     entrypoint: [""]
 
   tags:

@@ -14,7 +14,10 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Reconfigure GitLab
+  notify:
+    - Reconfigure GitLab
+    - Reload GitLab nginx
+    - Reload GitLab registry
 
 - name: Copy GitLab and Registry TLS private key
   ansible.builtin.copy:
@@ -24,7 +27,10 @@
     group: root
     mode: "0600"
   no_log: true
-  notify: Reconfigure GitLab
+  notify:
+    - Reconfigure GitLab
+    - Reload GitLab nginx
+    - Reload GitLab registry
 
 - name: Install internal CA certificate
   ansible.builtin.copy:
@@ -86,16 +92,16 @@
 - name: Configure Registry TLS certificate path
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
-    regexp: '^registry_nginx\[''ssl_certificate''\]'
-    line: "registry_nginx['ssl_certificate'] = '{{ gitlab_tls_registry_cert_dest }}'"
+    regexp: "^registry(?:_nginx|\\['nginx'\\])\\['ssl_certificate'\\]"
+    line: "registry['nginx']['ssl_certificate'] = '{{ gitlab_tls_registry_cert_dest }}'"
     insertafter: EOF
   notify: Reconfigure GitLab
 
 - name: Configure Registry TLS private key path
   ansible.builtin.lineinfile:
     path: /etc/gitlab/gitlab.rb
-    regexp: '^registry_nginx\[''ssl_certificate_key''\]'
-    line: "registry_nginx['ssl_certificate_key'] = '{{ gitlab_tls_registry_key_dest }}'"
+    regexp: "^registry(?:_nginx|\\['nginx'\\])\\['ssl_certificate_key'\\]"
+    line: "registry['nginx']['ssl_certificate_key'] = '{{ gitlab_tls_registry_key_dest }}'"
     insertafter: EOF
   notify: Reconfigure GitLab
 

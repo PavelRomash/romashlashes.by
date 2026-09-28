@@ -8,3 +8,13 @@
   ansible.builtin.command:
     cmd: gitlab-ctl reconfigure
   changed_when: true
+
+- name: Reload GitLab nginx
+  ansible.builtin.command:
+    cmd: gitlab-ctl hup nginx
+  changed_when: true
+
+- name: Reload GitLab registry
+  ansible.builtin.command:
+    cmd: gitlab-ctl hup registry
+  changed_when: true

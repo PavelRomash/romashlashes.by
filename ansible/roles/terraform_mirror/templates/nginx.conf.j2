@@ -2,7 +2,7 @@ server {
     listen 80;
     listen [::]:80;
 
-    server_name mirror.romashlashes.test;
+    server_name {{ terraform_mirror_server_names | join(' ') }};
 
     location = /healthz {
         access_log off;
@@ -19,10 +19,10 @@ server {
     listen 443 ssl;
     listen [::]:443 ssl;
 
-    server_name mirror.romashlashes.test;
+    server_name {{ terraform_mirror_server_names | join(' ') }};
 
-    ssl_certificate     /etc/nginx/certs/mirror.romashlashes.test.pem;
-    ssl_certificate_key /etc/nginx/certs/mirror.romashlashes.test-key.pem;
+    ssl_certificate     {{ terraform_mirror_tls_cert_dest }};
+    ssl_certificate_key {{ terraform_mirror_tls_key_dest }};
 
     ssl_protocols TLSv1.2 TLSv1.3;
 

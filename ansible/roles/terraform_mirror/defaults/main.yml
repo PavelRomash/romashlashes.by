@@ -23,3 +23,13 @@ terraform_mirror_provider_base_path: >-
 
 terraform_mirror_provider_release_base_url: >-
   https://github.com/bpg/terraform-provider-proxmox/releases/download/v{{ terraform_mirror_provider_version }}
+
+terraform_mirror_server_names:
+  - "mirror.romashlashes.test"
+  - "mirror.int.romashlashes.by"
+
+terraform_mirror_tls_cert_src: "{{ inventory_dir }}/../.secrets/mirror/mirror.pem"
+terraform_mirror_tls_key_src: "{{ inventory_dir }}/../.secrets/mirror/mirror.key"
+
+terraform_mirror_tls_cert_dest: "/etc/nginx/certs/mirror.pem"
+terraform_mirror_tls_key_dest: "/etc/nginx/certs/mirror.key"

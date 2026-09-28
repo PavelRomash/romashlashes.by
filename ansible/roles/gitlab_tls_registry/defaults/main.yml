@@ -1,6 +1,6 @@
 ---
-gitlab_tls_registry_gitlab_url: "https://gitlab.romashlashes.test"
-gitlab_tls_registry_registry_url: "https://registry.romashlashes.test"
+gitlab_tls_registry_gitlab_url: "https://gitlab.int.romashlashes.by"
+gitlab_tls_registry_registry_url: "https://registry.int.romashlashes.by"
 
 gitlab_tls_registry_cert_src: "{{ inventory_dir }}/../.secrets/gitlab/gitlab-registry.crt"
 gitlab_tls_registry_key_src: "{{ inventory_dir }}/../.secrets/gitlab/gitlab-registry.key"
