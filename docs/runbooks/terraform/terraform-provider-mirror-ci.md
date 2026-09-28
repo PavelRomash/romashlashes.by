@@ -1,217 +1,152 @@
-# Terraform Provider Mirror and GitLab CI
+# Terraform Provider Mirror + GitLab CI
 
-## 1. Зачем это было нужно
+## Назначение
 
-GitLab Runner на `ci-01` не мог выполнить `terraform init`, потому что доступ к публичному Terraform Registry (`registry.terraform.io`) блокировался по географическому признаку (Беларусь).
+Этот runbook описывает текущее состояние Terraform CI и внутреннего network mirror для Terraform provider `bpg/proxmox`.
 
-Ошибка возникала не в Terraform-коде и не в Proxmox. Проблема была именно в загрузке Terraform provider `bpg/proxmox`.
-
-Вместо VPN или внешнего proxy была построена внутренняя схема:
+Канонические внутренние сервисы:
 
 ```text
-GitLab
-  |
-  v
-GitLab Runner (ci-01)
-  |
-  | pull CI image
-  v
-GitLab Container Registry
-  |
-  v
-terraform-ci:1.0.0
-  |
-  | terraform init
-  v
-Terraform Provider Mirror (mirror-01)
-  |
-  v
-bpg/proxmox 0.114.0
+GitLab:   https://gitlab.int.romashlashes.by
+Registry: https://registry.int.romashlashes.by
+Mirror:   https://mirror.int.romashlashes.by
 ```
 
-Теперь CI не зависит от прямого доступа к `registry.terraform.io` для provider `bpg/proxmox`.
+Временный namespace `romashlashes.test` выведен из эксплуатации.
 
----
+## Архитектура
 
-## 2. Что в итоге построено
+```text
+Mac / VS Code
+      │
+      │ git push
+      ▼
+GitLab
+gitlab.int.romashlashes.by
+      │
+      ▼
+GitLab Runner
+ci-01 / Docker executor
+      │
+      │ pulls CI image
+      ▼
+Container Registry
+registry.int.romashlashes.by
+      │
+      ▼
+terraform-ci:1.0.0
+      │
+      │ TF_CLI_CONFIG_FILE
+      ▼
+ci/terraform/terraform.tfrc
+      │
+      ▼
+Terraform network mirror
+mirror.int.romashlashes.by
+      │
+      ▼
+registry.terraform.io/bpg/proxmox
+provider version 0.114.0
+```
+
+## Компоненты
 
 ### GitLab
 
-Хост:
+```text
+Hostname: gitlab-01
+IP:       192.168.0.187
+URL:      https://gitlab.int.romashlashes.by
+```
+
+### Container Registry
 
 ```text
-gitlab-01
-192.168.0.187
+URL: https://registry.int.romashlashes.by
 ```
 
-Имена:
+Terraform CI image:
 
 ```text
-gitlab.romashlashes.test
-registry.romashlashes.test
+registry.int.romashlashes.by/romashlashes/romashlashes.by/terraform-ci:1.0.0
 ```
 
-GitLab работает по HTTPS.
-
-Container Registry работает по HTTPS:
+### GitLab Runner
 
 ```text
-https://registry.romashlashes.test
+Hostname: ci-01
+IP:       192.168.0.186
+Executor: docker
 ```
 
-Проверка Registry:
-
-```bash
-curl -i https://registry.romashlashes.test/v2/
-```
-
-Ожидаемый ответ без авторизации:
+Runner coordinator URL:
 
 ```text
-HTTP/1.1 401 Unauthorized
-Docker-Distribution-Api-Version: registry/2.0
-WWW-Authenticate: Bearer ...
+https://gitlab.int.romashlashes.by
 ```
 
-`401 Unauthorized` в данном случае означает, что Registry работает и требует аутентификацию.
-
----
-
-## 3. GitLab Runner
-
-Runner расположен на:
-
-```text
-ci-01
-192.168.0.186
-```
-
-Используется Docker executor.
-
-Runner подключается к GitLab по HTTPS:
-
-```toml
-url = "https://gitlab.romashlashes.test"
-tls-ca-file = "/etc/gitlab-runner/certs/gitlab.romashlashes.test.crt"
-```
-
-Runner должен разрешать внутренние DNS-имена внутри job-контейнеров.
-
-До появления внутреннего DNS используется:
-
-```toml
-extra_hosts = [
-  "gitlab.romashlashes.test:192.168.0.187",
-  "mirror.romashlashes.test:192.168.0.188"
-]
-```
-
-Проверка Runner:
+Проверка:
 
 ```bash
 sudo gitlab-runner verify
 ```
 
----
-
-## 4. Terraform Provider Mirror
-
-Mirror расположен на:
+### Terraform mirror
 
 ```text
-mirror-01
-192.168.0.188
+Hostname: mirror-01
+IP:       192.168.0.188
+URL:      https://mirror.int.romashlashes.by
 ```
 
-DNS-имя:
+Health endpoint:
 
 ```text
-mirror.romashlashes.test
+https://mirror.int.romashlashes.by/healthz
 ```
 
-Mirror обслуживается nginx по HTTPS.
-
-Основной URL:
-
-```text
-https://mirror.romashlashes.test/providers/
-```
-
-Health check:
+Проверка:
 
 ```bash
-curl -i https://mirror.romashlashes.test/healthz
+curl -fsS https://mirror.int.romashlashes.by/healthz
 ```
 
 Ожидается:
 
 ```text
-HTTP/1.1 200 OK
+ok
 ```
 
-### Provider
+## Terraform provider
 
-В mirror хранится:
+Используемый provider:
 
 ```text
 registry.terraform.io/bpg/proxmox
 ```
 
-Закреплённая версия:
+Текущая версия:
 
 ```text
 0.114.0
 ```
 
-Поддерживаемые платформы:
+Terraform provider mirror хранит provider package и metadata, необходимые Terraform для установки provider без прямой загрузки с Terraform Registry.
+
+## Terraform CLI configuration
+
+Файл:
 
 ```text
-linux_amd64
-darwin_arm64
+ci/terraform/terraform.tfrc
 ```
 
-Структура:
-
-```text
-/providers/
-└── registry.terraform.io/
-    └── bpg/
-        └── proxmox/
-            ├── index.json
-            ├── 0.114.0.json
-            ├── terraform-provider-proxmox_0.114.0_linux_amd64.zip
-            └── terraform-provider-proxmox_0.114.0_darwin_arm64.zip
-```
-
-Mirror разворачивается через Ansible:
-
-```text
-ansible/roles/terraform_mirror/
-ansible/playbooks/terraform-mirror.yml
-```
-
----
-
-## 5. Почему Terraform всё ещё пишет `registry.terraform.io/bpg/proxmox`
-
-Это имя provider, а не обязательно адрес, с которого Terraform физически скачивает ZIP.
-
-Canonical provider address:
-
-```text
-registry.terraform.io/bpg/proxmox
-```
-
-Terraform CLI configuration говорит Terraform:
-
-> Для этого provider не обращайся напрямую в публичный Registry. Используй наш внутренний mirror.
-
-Конфигурация:
+Текущая конфигурация:
 
 ```hcl
 provider_installation {
   network_mirror {
-    url     = "https://mirror.romashlashes.test/providers/"
+    url     = "https://mirror.int.romashlashes.by/providers/"
     include = ["registry.terraform.io/bpg/proxmox"]
   }
 
@@ -221,562 +156,329 @@ provider_installation {
 }
 ```
 
-То есть логически provider остаётся:
+Trailing slash в URL network mirror должен сохраняться:
 
 ```text
-registry.terraform.io/bpg/proxmox
+https://mirror.int.romashlashes.by/providers/
 ```
 
-но физически скачивается с:
+## GitLab CI
+
+Terraform job использует CLI configuration из Git repository.
+
+Переменная:
 
 ```text
-mirror.romashlashes.test
+TF_CLI_CONFIG_FILE=$CI_PROJECT_DIR/ci/terraform/terraform.tfrc
 ```
 
----
+Таким образом URL mirror не требуется жёстко зашивать в Docker image.
 
-## 6. Зачем появился Docker image `terraform-ci`
-
-Раньше GitLab job использовал:
-
-```yaml
-image: hashicorp/terraform:latest
-```
-
-Внутри стандартного image не было:
-
-- нашего внутреннего CA;
-- конфигурации Terraform mirror;
-- зафиксированной рабочей версии Terraform для проекта.
-
-Поэтому был создан свой CI image:
+Логика:
 
 ```text
-terraform-ci:1.0.0
+terraform-check
+      │
+      ▼
+Terraform binary
+      │
+      ▼
+TF_CLI_CONFIG_FILE
+      │
+      ▼
+ci/terraform/terraform.tfrc
+      │
+      ▼
+mirror.int.romashlashes.by
 ```
 
-Полное имя:
+## Почему CLI configuration хранится в Git
 
-```text
-registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.0
-```
-
-Image содержит:
-
-```text
-Terraform 1.16.4
-internal Root CA
-/etc/terraformrc
-```
-
-Provider в Docker image НЕ хранится.
-
-Provider по-прежнему скачивается с `mirror-01`.
-
----
-
-## 7. Dockerfile CI image
-
-Исходники расположены:
-
-```text
-ci/terraform/
-```
-
-Файлы:
-
-```text
-ci/terraform/
-├── Dockerfile
-├── terraform.tfrc
-├── README.md
-└── romashlashes-rootCA.crt
-```
-
-Важно:
-
-```text
-romashlashes-rootCA.crt
-```
-
-является публичным сертификатом CA.
-
-Это НЕ приватный ключ.
-
-В Git запрещено помещать:
-
-```text
-rootCA-key.pem
-*.key
-private keys
-Deploy Tokens
-Runner tokens
-Vault passwords
-```
-
----
-
-## 8. TLS и сертификаты простыми словами
-
-В инфраструктуре есть внутренний Certificate Authority.
-
-Он нужен, чтобы наши внутренние HTTPS-сервисы могли использовать нормальный TLS:
-
-```text
-gitlab.romashlashes.test
-registry.romashlashes.test
-mirror.romashlashes.test
-```
-
-### Root CA certificate
-
-Пример:
-
-```text
-romashlashes-rootCA.crt
-```
-
-Это публичная часть.
-
-Её можно устанавливать на серверы и помещать внутрь CI image.
-
-Она говорит:
-
-> Я доверяю сертификатам, подписанным этим CA.
-
-### Root CA private key
-
-Например:
-
-```text
-rootCA-key.pem
-```
-
-Это секрет.
-
-Он используется для выпуска новых сертификатов.
-
-Его нельзя:
-
-- коммитить;
-- помещать в Docker image;
-- передавать в GitLab job;
-- хранить на Runner без необходимости.
-
----
-
-## 9. Почему CA устанавливался в нескольких местах
-
-Это не дублирование одной и той же задачи.
-
-Есть несколько независимых клиентов HTTPS.
-
-### GitLab Runner -> GitLab
-
-Runner должен доверять:
-
-```text
-https://gitlab.romashlashes.test
-```
-
-Поэтому CA нужен GitLab Runner.
-
-### Docker daemon -> GitLab Registry
-
-Docker daemon должен доверять:
-
-```text
-https://registry.romashlashes.test
-```
-
-Поэтому CA установлен в:
-
-```text
-/etc/docker/certs.d/registry.romashlashes.test/ca.crt
-```
-
-### terraform-ci container -> mirror
-
-Terraform внутри контейнера должен доверять:
-
-```text
-https://mirror.romashlashes.test
-```
-
-Поэтому публичный Root CA встроен в `terraform-ci`.
-
-Это три разных процесса:
-
-```text
-gitlab-runner
-dockerd
-terraform inside container
-```
-
-У каждого своё TLS-окружение.
-
----
-
-## 10. Deploy Token
-
-Deploy Token использовался только для первоначальной ручной загрузки image в GitLab Container Registry.
-
-Его scopes:
-
-```text
-read_registry
-write_registry
-```
-
-Он использовался для:
-
-```bash
-docker login
-docker push
-```
-
-После bootstrap:
-
-```bash
-docker logout registry.romashlashes.test
-```
-
-и shell-переменные были очищены:
-
-```bash
-unset REGISTRY_USER
-unset REGISTRY_TOKEN
-```
-
-Обычный GitLab CI job не должен хранить этот Deploy Token в `.gitlab-ci.yml`.
-
-Для доступа к Container Registry того же GitLab-проекта GitLab Runner использует job credentials.
-
----
-
-## 11. Зачем Container Registry
-
-Можно было оставить image только локально на `ci-01`, но это плохая архитектура.
-
-Тогда Runner зависел бы от случайного локального состояния конкретного сервера.
-
-Сейчас image хранится централизованно:
-
-```text
-GitLab Container Registry
-```
+Environment-specific mirror URL хранится в репозитории, а не внутри immutable CI image.
 
 Преимущества:
 
-- versioning;
-- воспроизводимость;
-- можно удалить локальный image и скачать снова;
-- Runner не зависит от ручной подготовки `/var/lib/docker`;
-- позже можно использовать этот же image на других Runner.
+- смена mirror URL не требует пересборки CI image;
+- configuration проходит code review;
+- изменения видны в Git history;
+- локальная и CI-конфигурация проще синхронизируются;
+- меньше скрытых настроек внутри Docker image.
 
-Контрольная проверка уже выполнена:
+## CI image
 
-```text
-docker push -> OK
-docker rmi -> OK
-docker pull -> OK
-terraform version -> Terraform v1.16.4
-```
-
----
-
-## 12. Почему image имеет версию `1.0.0`
-
-Используется:
+Исходники образа:
 
 ```text
-terraform-ci:1.0.0
+ci/terraform/
 ```
 
-а не:
+Основные файлы:
 
 ```text
-terraform-ci:latest
+ci/terraform/Dockerfile
+ci/terraform/README.md
+ci/terraform/terraform.tfrc
+ci/terraform/romashlashes-rootCA.crt
 ```
 
-Это позволяет точно знать, какое окружение использовал pipeline.
+CI image используется для запуска Terraform checks в GitLab Runner.
 
-Позже изменения должны выпускаться как новая версия, например:
-
-```text
-terraform-ci:1.0.1
-terraform-ci:1.1.0
-terraform-ci:2.0.0
-```
-
----
-
-## 13. Почему image собирался с `--provenance=false`
-
-При первой публикации Docker/BuildKit создал OCI manifest list с дополнительной provenance attestation.
-
-GitLab Registry при финальной публикации вернул:
-
-```text
-blob unknown to registry
-```
-
-Для нашего single-platform CI image provenance и SBOM на данном этапе не требуются.
-
-Image был пересобран:
+Проверить image reference:
 
 ```bash
-sudo docker buildx build \
-  --platform linux/amd64 \
-  --provenance=false \
-  --sbom=false \
-  --load \
-  -t registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.0 \
-  .
+grep -n 'terraform-ci' .gitlab-ci.yml
 ```
 
-После этого push прошёл успешно.
-
----
-
-## 14. Текущий Terraform GitLab CI job
-
-```yaml
-terraform-check:
-  stage: test
-  image:
-    name: registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.0
-    entrypoint: [""]
-
-  tags:
-    - docker
-    - dev
-
-  before_script:
-    - cd terraform/proxmox
-    - terraform version
-
-  script:
-    - terraform fmt -check -recursive
-    - terraform init -backend=false
-    - terraform validate
-
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      changes:
-        - terraform/**/*
-        - ci/terraform/**/*
-        - .gitlab-ci.yml
-```
-
-Этот job уже успешно прошёл.
-
----
-
-## 15. Что происходит при каждом `terraform-check`
-
-### Шаг 1
-
-GitLab видит новый commit.
-
-### Шаг 2
-
-GitLab Runner на `ci-01` получает job.
-
-### Шаг 3
-
-Docker Runner скачивает:
+Ожидаемый registry hostname:
 
 ```text
-terraform-ci:1.0.0
+registry.int.romashlashes.by
 ```
 
-из:
+## Internal CA
+
+Внутренние HTTPS-сервисы используют internal CA.
+
+Для Terraform CI требуется доверие к:
 
 ```text
-registry.romashlashes.test
+mirror.int.romashlashes.by
+registry.int.romashlashes.by
+gitlab.int.romashlashes.by
 ```
 
-### Шаг 4
+CA certificate для CI image:
 
-В контейнере выполняется:
+```text
+ci/terraform/romashlashes-rootCA.crt
+```
+
+Private CA key не должен храниться в Git.
+
+## Проверка mirror metadata
+
+Provider index:
 
 ```bash
-cd terraform/proxmox
-terraform version
+curl -fsS \
+  https://mirror.int.romashlashes.by/providers/registry.terraform.io/bpg/proxmox/index.json
 ```
 
-### Шаг 5
-
-Запускается:
+Metadata версии:
 
 ```bash
-terraform fmt -check -recursive
+curl -fsS \
+  https://mirror.int.romashlashes.by/providers/registry.terraform.io/bpg/proxmox/0.114.0.json
 ```
 
-Проверяется формат Terraform-кода.
+Оба запроса должны выполняться без TLS ошибок.
 
-### Шаг 6
+## Локальная проверка Terraform
 
-Запускается:
+На Mac:
 
 ```bash
-terraform init -backend=false
+cd ~/romashlashes.by/terraform/proxmox
 ```
 
-Terraform читает:
+Проверка форматирования:
 
-```text
-/etc/terraformrc
+```bash
+terraform fmt -check
 ```
 
-и видит:
-
-```text
-bpg/proxmox -> internal mirror
-```
-
-### Шаг 7
-
-Terraform скачивает provider с:
-
-```text
-https://mirror.romashlashes.test/providers/
-```
-
-### Шаг 8
-
-Запускается:
+Проверка конфигурации:
 
 ```bash
 terraform validate
 ```
 
-Проверяется корректность Terraform configuration.
-
----
-
-## 16. Что эта схема НЕ делает
-
-`terraform-check` НЕ выполняет:
+Для полной проверки установки provider через mirror можно удалить только локальный provider cache:
 
 ```bash
-terraform apply
+rm -rf .terraform
 ```
 
-Он не создаёт и не удаляет VM.
+Не удалять:
 
-Он только проверяет Terraform-код.
+```text
+terraform.tfstate
+terraform.tfstate.backup
+```
 
-Также:
+Инициализация:
 
 ```bash
 terraform init -backend=false
 ```
 
-не подключает рабочий remote backend.
+После этого:
 
-Это специально для CI validation job.
+```bash
+terraform validate
+```
 
----
+## GitLab terraform-check
 
-## 17. Разделение ответственности
-
-### Proxmox
-
-Запускает VM.
-
-### Terraform
-
-Описывает и создаёт VM/инфраструктуру.
-
-### Ansible
-
-Настраивает ОС и сервисы внутри VM.
-
-### Docker
-
-Запускает изолированные CI environments и приложения.
-
-### GitLab
-
-Хранит Git repository и управляет pipeline.
-
-### GitLab Runner
-
-Исполняет pipeline jobs.
-
-### GitLab Container Registry
-
-Хранит Docker images.
-
-### mirror-01
-
-Хранит утверждённые Terraform provider packages.
-
----
-
-## 18. Где что находится
+Для полного контрольного pipeline можно вручную запустить pipeline для ветки:
 
 ```text
-Mac
-├── Git repository
-├── Terraform code
-├── Ansible code
-└── CI image source
-        |
-        | git push
-        v
-GitLab
-        |
-        | job
-        v
-ci-01
-├── GitLab Runner
-└── Docker
-     |
-     | pull
-     v
-GitLab Container Registry
-     |
-     v
-terraform-ci
-     |
-     | terraform init
-     v
-mirror-01
-     |
-     v
-bpg/proxmox provider
+main
 ```
 
----
+В GitLab должны выполняться:
 
-## 19. Проверки
+```text
+django-check
+terraform-check
+ansible-check
+```
 
-### GitLab HTTPS
+После успешных checks вручную запускается:
+
+```text
+deploy-dev
+```
+
+Если обычный push не затрагивает Terraform-related files, `terraform-check` может не появляться из-за `rules: changes`.
+
+Для полного контрольного запуска используется ручной pipeline через GitLab UI.
+
+## Mirror Ansible role
+
+Terraform mirror управляется Ansible role:
+
+```text
+ansible/roles/terraform_mirror
+```
+
+Playbook:
+
+```text
+ansible/playbooks/terraform-mirror.yml
+```
+
+Canonical Nginx server name:
+
+```text
+mirror.int.romashlashes.by
+```
+
+TLS certificate:
+
+```text
+mirror.int.romashlashes.by
+```
+
+Применение:
 
 ```bash
-curl -I https://gitlab.romashlashes.test
+cd ~/romashlashes.by/ansible
+
+ansible-playbook \
+  -i inventory/hosts.yml \
+  playbooks/terraform-mirror.yml \
+  --ask-vault-pass
 ```
 
-### Registry
+## Проверка TLS mirror
 
 ```bash
-curl -i https://registry.romashlashes.test/v2/
+echo | openssl s_client \
+  -connect mirror.int.romashlashes.by:443 \
+  -servername mirror.int.romashlashes.by \
+  2>/dev/null |
+openssl x509 -noout -dates -ext subjectAltName
 ```
 
-Без логина ожидается `401 Unauthorized`.
+Ожидаемый SAN:
 
-### Mirror
+```text
+DNS:mirror.int.romashlashes.by
+```
+
+## Проверка Nginx mirror
+
+Health:
 
 ```bash
-curl -i https://mirror.romashlashes.test/healthz
+curl -fsS https://mirror.int.romashlashes.by/healthz
 ```
 
-Ожидается `200 OK`.
+Ожидается:
 
-### Runner
+```text
+ok
+```
+
+Provider index:
+
+```bash
+curl -fsS \
+  https://mirror.int.romashlashes.by/providers/registry.terraform.io/bpg/proxmox/index.json
+```
+
+## Обновление provider version
+
+При обновлении `bpg/proxmox` необходимо синхронно проверить:
+
+1. Terraform required provider version;
+2. содержимое mirror;
+3. provider metadata;
+4. package checksum;
+5. Terraform lock file;
+6. CI pipeline.
+
+После добавления новой версии mirror должен отдавать:
+
+```text
+/providers/registry.terraform.io/bpg/proxmox/index.json
+```
+
+и metadata соответствующей версии:
+
+```text
+/providers/registry.terraform.io/bpg/proxmox/<VERSION>.json
+```
+
+После обновления:
+
+```bash
+terraform init -upgrade
+terraform validate
+```
+
+Изменения `.terraform.lock.hcl` должны быть просмотрены перед commit.
+
+## Проверка Container Registry
+
+Registry endpoint:
+
+```bash
+curl -I https://registry.int.romashlashes.by/v2/
+```
+
+Без авторизации нормальный ответ:
+
+```text
+HTTP 401
+```
+
+Authentication realm должен ссылаться на:
+
+```text
+https://gitlab.int.romashlashes.by/jwt/auth
+```
+
+Это подтверждает корректную связку:
+
+```text
+Registry
+   ↓
+GitLab authentication
+```
+
+## Проверка GitLab Runner
 
 На `ci-01`:
 
@@ -784,192 +486,212 @@ curl -i https://mirror.romashlashes.test/healthz
 sudo gitlab-runner verify
 ```
 
-### Docker Registry trust
-
-На `ci-01`:
+Проверить coordinator URL без вывода token:
 
 ```bash
-sudo docker pull registry.romashlashes.test/nonexistent/image:latest
-```
-
-Ошибка доступа допустима.
-
-Ошибка:
-
-```text
-x509: certificate signed by unknown authority
-```
-
-недопустима.
-
-### CI image
-
-```bash
-sudo docker run --rm \
-  registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.0 \
-  terraform version
+sudo grep -nE \
+'^[[:space:]]*(url|tls-ca-file)[[:space:]]*=' \
+/etc/gitlab-runner/config.toml
 ```
 
 Ожидается:
 
 ```text
-Terraform v1.16.4
-on linux_amd64
+url = "https://gitlab.int.romashlashes.by"
 ```
 
----
-
-## 20. Обновление Terraform provider
-
-Не заменять ZIP вручную без фиксации версии и checksum.
-
-Порядок:
-
-1. выбрать новую версию provider;
-2. получить официальные release artifacts;
-3. проверить SHA256;
-4. обновить Ansible role mirror;
-5. применить role на `mirror-01`;
-6. обновить `.terraform.lock.hcl`;
-7. проверить Mac;
-8. проверить CI;
-9. commit.
-
----
-
-## 21. Обновление `terraform-ci`
-
-Если меняется:
-
-- версия Terraform;
-- internal CA;
-- `terraform.tfrc`;
-- системные пакеты image;
-
-следует выпустить новую версию image.
-
-Например:
+Runner CA:
 
 ```text
-1.0.0 -> 1.0.1
+/etc/gitlab-runner/certs/romashlashes-rootCA.crt
 ```
 
-Собрать:
-
-```bash
-docker buildx build \
-  --platform linux/amd64 \
-  --provenance=false \
-  --sbom=false \
-  --load \
-  -t registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.1 \
-  .
-```
-
-Push:
-
-```bash
-docker push \
-  registry.romashlashes.test/romashlashes/romashlashes.by/terraform-ci:1.0.1
-```
-
-Затем изменить `.gitlab-ci.yml`.
-
----
-
-## 22. Security rules
-
-Никогда не коммитить:
+Docker Registry trust:
 
 ```text
-Terraform API tokens
-GitLab Runner tokens
-Deploy Tokens
-Vault passwords
-SSH private keys
-TLS private keys
-rootCA-key.pem
+/etc/docker/certs.d/registry.int.romashlashes.by/ca.crt
 ```
 
-Допустимо хранить:
+## DNS
+
+Mirror DNS:
+
+```bash
+dig @192.168.0.10 mirror.int.romashlashes.by A +short
+dig @192.168.0.11 mirror.int.romashlashes.by A +short
+```
+
+Ожидается:
 
 ```text
-public Root CA certificate
-public TLS certificates
-checksums
-provider metadata
-Terraform lock file
+mirror-01.int.romashlashes.by.
+192.168.0.188
 ```
 
-Перед commit:
+GitLab:
 
-```bash
-git status
-git diff --cached
+```text
+gitlab.int.romashlashes.by -> 192.168.0.187
 ```
 
-Полезно:
+Registry:
 
-```bash
-git status --ignored
-git check-ignore <file>
+```text
+registry.int.romashlashes.by -> 192.168.0.187
 ```
 
----
+## Миграция с временного namespace
 
-## 23. Текущие временные ограничения
-
-### `/etc/hosts`
-
-Сейчас внутренние имена частично разрешаются через `/etc/hosts` и Runner `extra_hosts`.
-
-Это приемлемо для текущей lab/production-like инфраструктуры, но следующим инфраструктурным улучшением должен стать внутренний DNS.
-
-Тогда:
+Ранее Terraform CI использовал временные имена вида:
 
 ```text
 gitlab.romashlashes.test
 registry.romashlashes.test
 mirror.romashlashes.test
-dev.romashlashes.test
 ```
 
-будут разрешаться централизованно.
-
-### Mirror
-
-Сейчас mirror содержит только provider:
+После внедрения canonical DNS namespace все активные зависимости переведены на:
 
 ```text
-bpg/proxmox
+gitlab.int.romashlashes.by
+registry.int.romashlashes.by
+mirror.int.romashlashes.by
 ```
 
-Если Terraform начнёт использовать другие providers, их также потребуется зеркалировать либо изменить policy.
+Временная DNS zone выведена из эксплуатации.
 
----
+`extra_hosts` для GitLab Runner больше не используется.
 
-## 24. Главная идея в одном абзаце
-
-GitLab Runner запускает Terraform не напрямую на сервере, а внутри специального Docker image `terraform-ci`. Этот image содержит правильную версию Terraform, доверяет внутренним HTTPS-сертификатам и знает, что provider `bpg/proxmox` нужно скачивать не из заблокированного публичного Registry, а с нашего `mirror-01`. Сам Docker image хранится в GitLab Container Registry. Таким образом CI стал воспроизводимым и не зависит от VPN, ручной настройки конкретного Runner или прямого доступа к `registry.terraform.io`.
-
----
-
-## 25. Статус
-
-На момент создания документации:
+Terraform mirror URL теперь берётся из:
 
 ```text
-GitLab HTTPS                         OK
-GitLab Container Registry           OK
-GitLab Runner HTTPS                 OK
-Docker trust for Registry           OK
-Terraform Provider Mirror           OK
-terraform-ci:1.0.0 build            OK
-terraform-ci Registry push          OK
-terraform-ci Registry pull          OK
-Terraform 1.16.4 inside image       OK
-bpg/proxmox 0.114.0 via mirror      OK
-GitLab terraform-check              OK
+ci/terraform/terraform.tfrc
 ```
 
-`ansible-check` требует отдельного разбора по CI job log.
+## Troubleshooting
+
+### Mirror health не отвечает
+
+Проверить DNS:
+
+```bash
+dig @192.168.0.10 mirror.int.romashlashes.by A +short
+```
+
+Проверить HTTPS:
+
+```bash
+curl -v https://mirror.int.romashlashes.by/healthz
+```
+
+Проверить Nginx на `mirror-01`.
+
+### Terraform сообщает x509 error
+
+Проверить сертификат:
+
+```bash
+echo | openssl s_client \
+  -connect mirror.int.romashlashes.by:443 \
+  -servername mirror.int.romashlashes.by \
+  2>/dev/null |
+openssl x509 -noout -issuer -subject -ext subjectAltName
+```
+
+Проверить наличие internal CA в окружении, где запускается Terraform.
+
+### Terraform идёт напрямую в Registry
+
+Проверить:
+
+```bash
+echo "$TF_CLI_CONFIG_FILE"
+```
+
+В CI ожидается:
+
+```text
+$CI_PROJECT_DIR/ci/terraform/terraform.tfrc
+```
+
+Проверить содержимое:
+
+```bash
+cat ci/terraform/terraform.tfrc
+```
+
+### Provider version отсутствует
+
+Проверить index:
+
+```bash
+curl -fsS \
+  https://mirror.int.romashlashes.by/providers/registry.terraform.io/bpg/proxmox/index.json
+```
+
+Проверить version metadata:
+
+```bash
+curl -fsS \
+  https://mirror.int.romashlashes.by/providers/registry.terraform.io/bpg/proxmox/0.114.0.json
+```
+
+### Runner не может скачать CI image
+
+Проверить Registry:
+
+```bash
+curl -I https://registry.int.romashlashes.by/v2/
+```
+
+Проверить Runner:
+
+```bash
+sudo gitlab-runner verify
+```
+
+Проверить Docker CA:
+
+```bash
+sudo ls -l \
+  /etc/docker/certs.d/registry.int.romashlashes.by/ca.crt
+```
+
+## Финальная проверка
+
+Mirror:
+
+```bash
+curl -fsS https://mirror.int.romashlashes.by/healthz
+```
+
+Registry:
+
+```bash
+curl -I https://registry.int.romashlashes.by/v2/
+```
+
+GitLab:
+
+```bash
+curl -I https://gitlab.int.romashlashes.by/
+```
+
+Terraform:
+
+```bash
+cd ~/romashlashes.by/terraform/proxmox
+terraform init -backend=false
+terraform validate
+```
+
+GitLab full verification pipeline:
+
+```text
+django-check    -> passed
+terraform-check -> passed
+ansible-check   -> passed
+deploy-dev      -> passed (manual)
+```
+
+После успешных проверок Terraform CI считается полностью переведённым на canonical namespace `int.romashlashes.by`.

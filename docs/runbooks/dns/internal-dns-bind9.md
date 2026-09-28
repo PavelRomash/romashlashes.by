@@ -1,62 +1,169 @@
-# Internal DNS Runbook — romashlashes.by
+# Internal DNS: BIND9
 
-## 1. Назначение
+## Назначение
 
-Этот документ описывает внутреннюю DNS-инфраструктуру проекта `romashlashes.by`: архитектуру, Terraform, Ansible, BIND9, primary/secondary, TSIG, клиентскую конфигурацию, failover, проверки, эксплуатацию и дальнейшую миграцию с временного namespace `romashlashes.test` на канонический `int.romashlashes.by`.
+Этот runbook описывает внутреннюю DNS-инфраструктуру проекта `romashlashes.by`.
 
-Цель проекта — отказаться от локальных `/etc/hosts` и `GitLab Runner extra_hosts` и заменить их централизованным, воспроизводимым и отказоустойчивым DNS.
-
-## 2. Архитектура
-
-DNS-серверы:
-
-| Host | Role | IP |
-|---|---|---|
-| `dns-01` | BIND primary | `192.168.0.10` |
-| `dns-02` | BIND secondary | `192.168.0.11` |
-
-Клиенты:
-
-| Host | IP |
-|---|---|
-| `prod-01` | `192.168.0.183` |
-| `stage-01` | `192.168.0.184` |
-| `dev-01` | `192.168.0.185` |
-| `ci-01` | `192.168.0.186` |
-| `gitlab-01` | `192.168.0.187` |
-| `mirror-01` | `192.168.0.188` |
-
-Клиентская схема:
-
-```text
-application
-   |
-   v
-127.0.0.53
-systemd-resolved
-   |
-   +----------------------+
-   |                      |
-   v                      v
-192.168.0.10          192.168.0.11
-dns-01 primary        dns-02 secondary
-```
-
-Оба DNS сейчас находятся на одном физическом Proxmox-хосте. Это защищает от отказа отдельной VM или BIND, но не от отказа самого Proxmox-хоста. В будущем `dns-02` желательно перенести на второй Proxmox node.
-
-## 3. DNS zones
-
-### 3.1 Каноническая зона
+Текущий канонический внутренний namespace:
 
 ```text
 int.romashlashes.by
 ```
 
-Основные A-записи:
+Временный namespace `romashlashes.test` выведен из эксплуатации и больше не используется runtime-конфигурацией проекта.
+
+Внутренний DNS используется вместо:
+
+- `/etc/hosts`;
+- GitLab Runner `extra_hosts`;
+- `curl --resolve`;
+- ручной привязки внутренних сервисов к IP-адресам.
+
+## Архитектура
+
+```text
+                    LAN 192.168.0.0/24
+                           │
+             ┌─────────────┴─────────────┐
+             │                           │
+         dns-01                      dns-02
+      192.168.0.10                192.168.0.11
+        primary                     secondary
+             │                           │
+             └──── TSIG zone transfer ──┘
+                           │
+                  int.romashlashes.by
+                           │
+     ┌──────────────┬──────────────┬──────────────┐
+     │              │              │              │
+   GitLab         Registry        Mirror          DEV
+192.168.0.187   192.168.0.187  192.168.0.188  192.168.0.185
+```
+
+Оба DNS-сервера работают как:
+
+- authoritative DNS для внутренних зон;
+- recursive resolver для доверенной локальной сети;
+- forwarding resolver для публичных доменов.
+
+Текущий upstream forwarder:
+
+```text
+192.168.0.1
+```
+
+## DNS-серверы
+
+### dns-01
+
+```text
+Hostname: dns-01
+IP:       192.168.0.10
+Role:     primary
+```
+
+Назначение:
+
+- хранит primary zone files;
+- является authoritative primary;
+- передаёт зоны на `dns-02`;
+- обслуживает recursive DNS для LAN.
+
+### dns-02
+
+```text
+Hostname: dns-02
+IP:       192.168.0.11
+Role:     secondary
+```
+
+Назначение:
+
+- получает authoritative zones через zone transfer;
+- используется клиентами как второй DNS;
+- обеспечивает DNS service failover при остановке `dns-01`.
+
+Обе VM сейчас работают на одном физическом Proxmox host.
+
+Это даёт отказоустойчивость DNS-сервиса на уровне VM, но не защищает от отказа самого Proxmox host.
+
+## Terraform
+
+DNS VM создаются Terraform.
+
+Основные файлы:
+
+```text
+terraform/proxmox/dns.tf
+terraform/proxmox/dns-variables.tf
+terraform/proxmox/dns-outputs.tf
+```
+
+VM:
+
+```text
+dns-01 -> 192.168.0.10
+dns-02 -> 192.168.0.11
+```
+
+После изменения Terraform:
+
+```bash
+cd ~/romashlashes.by/terraform/proxmox
+
+terraform fmt -check
+terraform validate
+terraform plan
+```
+
+Terraform state хранится локально и не должен попадать в Git.
+
+## Ansible
+
+DNS configuration управляется Ansible.
+
+Основной playbook:
+
+```text
+ansible/playbooks/dns.yml
+```
+
+Основная роль:
+
+```text
+ansible/roles/dns_bind
+```
+
+Inventory groups:
+
+```text
+dns
+├── dns_primary
+└── dns_secondary
+```
+
+Секрет TSIG хранится через Ansible Vault:
+
+```text
+ansible/inventory/group_vars/dns/vault.yml
+```
+
+TSIG secret нельзя хранить открытым текстом в Git.
+
+## Canonical zone
+
+Основная внутренняя зона:
+
+```text
+int.romashlashes.by
+```
+
+Примеры основных записей:
 
 ```text
 dns-01.int.romashlashes.by     -> 192.168.0.10
 dns-02.int.romashlashes.by     -> 192.168.0.11
+
 prod-01.int.romashlashes.by    -> 192.168.0.183
 stage-01.int.romashlashes.by   -> 192.168.0.184
 dev-01.int.romashlashes.by     -> 192.168.0.185
@@ -65,38 +172,18 @@ gitlab-01.int.romashlashes.by  -> 192.168.0.187
 mirror-01.int.romashlashes.by  -> 192.168.0.188
 ```
 
-Сервисные CNAME:
+Service aliases:
 
 ```text
-gitlab.int.romashlashes.by
-    -> gitlab-01.int.romashlashes.by
-
-registry.int.romashlashes.by
-    -> gitlab-01.int.romashlashes.by
-
-mirror.int.romashlashes.by
-    -> mirror-01.int.romashlashes.by
+dev.int.romashlashes.by       -> 192.168.0.185
+gitlab.int.romashlashes.by    -> 192.168.0.187
+registry.int.romashlashes.by  -> 192.168.0.187
+mirror.int.romashlashes.by    -> 192.168.0.188
 ```
 
-Так сервисное имя отделено от имени VM.
+## Reverse zone
 
-### 3.2 Compatibility zone
-
-```text
-romashlashes.test
-```
-
-Она оставлена временно, чтобы не ломать текущие URL и TLS-сертификаты:
-
-```text
-gitlab.romashlashes.test   -> 192.168.0.187
-registry.romashlashes.test -> 192.168.0.187
-mirror.romashlashes.test   -> 192.168.0.188
-```
-
-Удалять эту зону можно только после полной миграции сервисов и сертификатов на `*.int.romashlashes.by`.
-
-### 3.3 Reverse zone
+Reverse DNS zone:
 
 ```text
 0.168.192.in-addr.arpa
@@ -106,7 +193,8 @@ mirror.romashlashes.test   -> 192.168.0.188
 
 ```text
 192.168.0.187
-    -> gitlab-01.int.romashlashes.by.
+  ->
+gitlab-01.int.romashlashes.by
 ```
 
 Проверка:
@@ -116,767 +204,575 @@ dig @192.168.0.10 -x 192.168.0.187 +short
 dig @192.168.0.11 -x 192.168.0.187 +short
 ```
 
-## 4. Primary / Secondary
+Ожидается:
 
-`dns-01` — источник истины для зон.
+```text
+gitlab-01.int.romashlashes.by.
+```
 
-`dns-02` — secondary, получает зоны с primary.
+## Primary / secondary
+
+`dns-01` является primary.
+
+`dns-02` является secondary.
+
+Передача зон защищена TSIG.
+
+Схема:
 
 ```text
 dns-01
-primary
-   |
-   | NOTIFY / AXFR / IXFR
-   | TSIG authenticated
-   v
+ primary
+   │
+   │ TSIG-authenticated AXFR/IXFR
+   ▼
 dns-02
-secondary
+ secondary
 ```
 
-Secondary продолжает обслуживать зоны, если BIND на primary недоступен.
-
-## 5. TSIG
-
-Zone transfer защищён TSIG.
-
-Секрет хранится только в Ansible Vault:
+На primary zone files хранятся в:
 
 ```text
-ansible/inventory/group_vars/dns/vault.yml
+/etc/bind/zones/
 ```
 
-Формат:
+На secondary полученные зоны хранятся BIND в cache directory.
 
-```yaml
-dns_bind_tsig_secret: !vault |
-  $ANSIBLE_VAULT;1.1;AES256
-  ...
-```
+## Проверка authoritative DNS
 
-Plaintext TSIG secret нельзя хранить в Git.
-
-## 6. Terraform
-
-DNS VM описаны в:
-
-```text
-terraform/proxmox/
-├── dns.tf
-├── dns-variables.tf
-└── dns-outputs.tf
-```
-
-Параметры:
-
-```text
-dns-01: 1 CPU / 512 MB / 20 GB / 192.168.0.10/24
-dns-02: 1 CPU / 512 MB / 20 GB / 192.168.0.11/24
-gateway: 192.168.0.1
-bootstrap DNS: 192.168.0.1
-template: VM 9100
-```
-
-Перед apply:
+Проверка GitLab через primary:
 
 ```bash
-cd ~/romashlashes.by/terraform/proxmox
-terraform fmt -check
-terraform validate
-terraform plan
+dig @192.168.0.10 gitlab.int.romashlashes.by A +short
 ```
 
-Terraform state не хранится в Git.
-
-## 7. Ansible layout
-
-```text
-ansible/
-├── inventory/
-│   ├── hosts.yml
-│   └── group_vars/
-│       └── dns/
-│           ├── main.yml
-│           ├── vault.yml
-│           └── vault.yml.example
-├── playbooks/
-│   ├── dns.yml
-│   ├── dns-client-ci.yml
-│   └── dns-client-all.yml
-└── roles/
-    ├── dns_bind/
-    │   ├── defaults/main.yml
-    │   ├── handlers/main.yml
-    │   ├── tasks/main.yml
-    │   └── templates/
-    │       ├── named.conf.options.j2
-    │       ├── named.conf.local.j2
-    │       ├── dns-xfr.key.j2
-    │       ├── db.int.romashlashes.by.j2
-    │       ├── db.romashlashes.test.j2
-    │       └── db.0.168.192.j2
-    └── dns_client/
-        ├── defaults/main.yml
-        ├── handlers/main.yml
-        ├── tasks/main.yml
-        └── templates/60-internal-dns.yaml.j2
-```
-
-## 8. Inventory
-
-DNS-группы:
-
-```yaml
-dns:
-  children:
-    dns_primary:
-      hosts:
-        dns-01:
-          ansible_host: 192.168.0.10
-          dns_bind_server_role: primary
-
-    dns_secondary:
-      hosts:
-        dns-02:
-          ansible_host: 192.168.0.11
-          dns_bind_server_role: secondary
-```
-
-## 9. Что делает роль `dns_bind`
-
-Роль:
-
-1. валидирует роль primary/secondary;
-2. устанавливает BIND;
-3. создаёт директории;
-4. разворачивает TSIG;
-5. рендерит `named.conf.options`;
-6. рендерит зоны на primary;
-7. рендерит `named.conf.local`;
-8. запускает `named-checkconf`;
-9. запускает `named-checkzone`;
-10. включает и стартует BIND;
-11. проверяет внутреннюю authoritative lookup;
-12. проверяет public recursive lookup.
-
-На Debian 13 утилиты находятся здесь:
-
-```text
-/usr/bin/named-checkconf
-/usr/bin/named-checkzone
-```
-
-## 10. Recursive DNS
-
-BIND обслуживает две категории запросов.
-
-Внутренние:
-
-```text
-gitlab.int.romashlashes.by
-    -> authoritative answer from local zone
-```
-
-Публичные:
-
-```text
-github.com
-    -> forwarder
-    -> 192.168.0.1
-```
-
-Разрешённая сеть:
-
-```text
-192.168.0.0/24
-```
-
-Нельзя превращать сервер в открытый Internet recursive resolver.
-
-## 11. Deploy DNS servers
+Проверка через secondary:
 
 ```bash
-cd ~/romashlashes.by/ansible
-ansible-lint
-```
-
-```bash
-ansible-playbook   -i inventory/hosts.yml   playbooks/dns.yml   --syntax-check   --ask-vault-pass
-```
-
-```bash
-ansible-playbook   -i inventory/hosts.yml   playbooks/dns.yml   --ask-vault-pass
+dig @192.168.0.11 gitlab.int.romashlashes.by A +short
 ```
 
 Ожидается:
 
 ```text
-dns-01 ... failed=0
-dns-02 ... failed=0
+gitlab-01.int.romashlashes.by.
+192.168.0.187
 ```
 
-Повторный запуск должен быть идемпотентным.
-
-## 12. SOA serial
-
-Формат:
-
-```text
-YYYYMMDDNN
-```
-
-Пример:
-
-```text
-2026092701
-```
-
-При каждом изменении зоны serial должен увеличиваться.
-
-Примеры:
-
-```text
-2026092801
-2026092802
-```
-
-Если serial не изменить, secondary может не принять новую версию зоны.
-
-## 13. Проверка DNS servers
-
-Canonical:
+Registry:
 
 ```bash
-dig @192.168.0.10 gitlab.int.romashlashes.by A
-dig @192.168.0.11 gitlab.int.romashlashes.by A
+dig @192.168.0.10 registry.int.romashlashes.by A +short
 ```
 
-Compatibility:
+Mirror:
 
 ```bash
-dig @192.168.0.10 gitlab.romashlashes.test A +short
-dig @192.168.0.11 gitlab.romashlashes.test A +short
+dig @192.168.0.10 mirror.int.romashlashes.by A +short
 ```
 
-Reverse:
+DEV:
 
 ```bash
-dig @192.168.0.10 -x 192.168.0.187 +short
-dig @192.168.0.11 -x 192.168.0.187 +short
+dig @192.168.0.10 dev.int.romashlashes.by A +short
 ```
 
-Public:
-
-```bash
-dig @192.168.0.10 github.com A +short
-dig @192.168.0.11 github.com A +short
-```
-
-SOA:
-
-```bash
-dig @192.168.0.10 int.romashlashes.by SOA +short
-dig @192.168.0.11 int.romashlashes.by SOA +short
-```
-
-Serial должен совпадать на обоих серверах.
-
-Проверенный serial при первоначальном развёртывании:
-
-```text
-2026092701
-```
-
-## 14. DNS clients
-
-Клиенты используют Netplan + `systemd-networkd` + `systemd-resolved`.
-
-Cloud-Init владеет:
-
-```text
-/etc/netplan/50-cloud-init.yaml
-```
-
-Ansible его не редактирует.
-
-Роль `dns_client` создаёт:
-
-```text
-/etc/netplan/60-internal-dns.yaml
-```
-
-Override:
-
-```yaml
-network:
-  version: 2
-  ethernets:
-    eth0:
-      dhcp4-overrides:
-        use-dns: false
-      nameservers:
-        addresses:
-          - 192.168.0.10
-          - 192.168.0.11
-        search:
-          - int.romashlashes.by
-```
-
-DHCP продолжает выдавать IP и gateway, но DNS от DHCP игнорируется.
-
-Проверка:
-
-```bash
-resolvectl status
-```
-
-Ожидается:
-
-```text
-Current DNS Server: 192.168.0.10
-DNS Servers: 192.168.0.10 192.168.0.11
-DNS Domain: int.romashlashes.by
-```
-
-## 15. Canary rollout
-
-Первым клиентом был `ci-01`.
-
-Причина: именно GitLab Runner ранее ломался при отсутствии ручного hostname mapping.
-
-Порядок:
-
-```text
-DNS servers
-   |
-   v
-ci-01
-   |
-   +--> host DNS
-   +--> GitLab Runner
-   +--> Docker DNS
-   +--> failover
-   |
-   v
-remaining VMs
-```
-
-Canary:
-
-```bash
-ansible-playbook   -i inventory/hosts.yml   playbooks/dns-client-ci.yml   --ask-vault-pass
-```
-
-## 16. Full rollout
-
-После canary роль была применена к:
-
-```text
-dev-01
-stage-01
-prod-01
-ci-01
-gitlab-01
-mirror-01
-```
-
-В playbook используется:
-
-```yaml
-serial: 1
-```
-
-Это важно для сетевых изменений: хосты изменяются по одному.
-
-```bash
-ansible-playbook   -i inventory/hosts.yml   playbooks/dns-client-all.yml   --ask-vault-pass
-```
-
-Проверенный результат:
-
-```text
-ci-01       changed=0 failed=0
-dev-01      changed=2 failed=0
-stage-01    changed=2 failed=0
-prod-01     changed=2 failed=0
-gitlab-01   changed=2 failed=0
-mirror-01   changed=2 failed=0
-```
-
-## 17. Docker DNS
-
-На `ci-01` проверено:
-
-```bash
-sudo docker run --rm busybox:1.37   nslookup gitlab.romashlashes.test
-```
-
-Docker показал:
-
-```text
-Server: 192.168.0.10
-```
-
-И успешно получил:
-
-```text
-gitlab.romashlashes.test -> 192.168.0.187
-```
-
-Проверены также:
-
-```text
-mirror.romashlashes.test   -> 192.168.0.188
-registry.romashlashes.test -> 192.168.0.187
-gitlab.int.romashlashes.by -> 192.168.0.187
-```
-
-Это особенно важно, потому что GitLab CI jobs выполняются в Docker executor.
-
-## 18. GitLab Runner
-
-Ранее Runner использовал:
-
-```toml
-extra_hosts = [
-  "gitlab.romashlashes.test:192.168.0.187",
-  "mirror.romashlashes.test:192.168.0.188"
-]
-```
-
-После проверки DNS этот workaround был удалён.
-
-Проверка:
-
-```bash
-sudo gitlab-runner verify
-```
-
-Результат:
-
-```text
-Verifying runner... is valid
-```
-
-После удаления `extra_hosts` GitLab pipeline прошёл без ошибок.
-
-## 19. `/etc/hosts`
-
-Были удалены записи:
-
-```text
-192.168.0.187 gitlab.romashlashes.test registry.romashlashes.test
-192.168.0.188 mirror.romashlashes.test
-```
-
-После fleet-wide проверки старых service-discovery записей не осталось.
-
-`/etc/hosts` больше не используется как механизм обнаружения внутренних сервисов.
-
-## 20. Failover
-
-Primary был остановлен:
-
-```bash
-ssh pavel@192.168.0.10   'sudo systemctl stop named'
-```
-
-После очистки cache:
-
-```bash
-sudo resolvectl flush-caches
-```
-
-`ci-01` переключился на:
-
-```text
-Current DNS Server: 192.168.0.11
-```
-
-Docker тоже успешно использовал:
-
-```text
-Server: 192.168.0.11
-```
-
-Проверены:
-
-```text
-gitlab.int.romashlashes.by
-github.com
-```
-
-После теста primary возвращён:
-
-```bash
-ssh pavel@192.168.0.10   'sudo systemctl start named'
-```
-
-Таким образом service-level failover подтверждён.
-
-## 21. CI/CD validation
-
-DNS-конфигурация хранится в Git.
-
-Проверяются:
-
-```text
-ansible-lint
-Ansible syntax-check
-Terraform validation
-```
-
-После реализации:
-
-```text
-GitLab pipeline: passed
-GitLab push: done
-GitHub push: done
-```
-
-## 22. Процедура изменения DNS record
-
-1. Изменить нужный zone template.
-2. Увеличить SOA serial.
-3. Запустить `ansible-lint`.
-4. Запустить syntax-check.
-5. Применить `dns.yml`.
-6. Проверить primary.
-7. Проверить secondary.
-8. Сравнить SOA serial.
-9. Проверить lookup с клиента.
-10. Commit / push только после runtime validation.
-
-Пример:
-
-```bash
-cd ~/romashlashes.by/ansible
-
-ansible-lint
-
-ansible-playbook   -i inventory/hosts.yml   playbooks/dns.yml   --syntax-check   --ask-vault-pass
-
-ansible-playbook   -i inventory/hosts.yml   playbooks/dns.yml   --ask-vault-pass
-```
-
-## 23. Добавление новой VM
-
-Для нового infrastructure host:
-
-1. создать VM через Terraform;
-2. назначить стабильный IP;
-3. добавить A record;
-4. добавить service CNAME при необходимости;
-5. добавить PTR;
-6. увеличить SOA serial;
-7. применить `dns.yml`;
-8. добавить host в Ansible inventory;
-9. применить `dns_client`;
-10. проверить internal/public DNS.
-
-## 24. Troubleshooting
-
-BIND:
-
-```bash
-sudo systemctl status named --no-pager
-```
-
-Config:
-
-```bash
-sudo /usr/bin/named-checkconf
-```
-
-Zone:
-
-```bash
-sudo /usr/bin/named-checkzone   int.romashlashes.by   /etc/bind/zones/db.int.romashlashes.by
-```
+## Проверка SOA
 
 Primary:
 
 ```bash
-dig @192.168.0.10 gitlab.int.romashlashes.by A
+dig @192.168.0.10 int.romashlashes.by SOA +short
 ```
 
 Secondary:
 
 ```bash
-dig @192.168.0.11 gitlab.int.romashlashes.by A
-```
-
-SOA:
-
-```bash
-dig @192.168.0.10 int.romashlashes.by SOA +short
 dig @192.168.0.11 int.romashlashes.by SOA +short
 ```
 
-Client:
+SOA serial должен совпадать на обоих серверах.
+
+После изменения zone data serial должен быть увеличен.
+
+## Recursive DNS
+
+Оба сервера разрешают публичные DNS-имена для доверенной LAN.
+
+Проверка:
+
+```bash
+dig @192.168.0.10 deb.debian.org A +short
+dig @192.168.0.11 deb.debian.org A +short
+```
+
+Оба запроса должны возвращать публичные IP.
+
+## DNS clients
+
+Основные Debian VM используют:
+
+- Netplan;
+- systemd-networkd;
+- systemd-resolved.
+
+Ansible role:
+
+```text
+ansible/roles/dns_client
+```
+
+Роль создаёт:
+
+```text
+/etc/netplan/60-internal-dns.yaml
+```
+
+Исходный cloud-init Netplan file не изменяется:
+
+```text
+/etc/netplan/50-cloud-init.yaml
+```
+
+Основные DNS client settings:
+
+```text
+DNS:
+  192.168.0.10
+  192.168.0.11
+
+Search domain:
+  int.romashlashes.by
+```
+
+DHCP продолжает использоваться для IP и gateway, но DNS, полученный через DHCP, отключён.
+
+Проверка на Debian client:
 
 ```bash
 resolvectl status
 ```
 
-Cache:
+Проверка имени:
 
 ```bash
-sudo resolvectl flush-caches
+getent ahostsv4 gitlab.int.romashlashes.by
 ```
 
-OS resolver:
+## Docker DNS
 
-```bash
-getent hosts gitlab.int.romashlashes.by
-```
-
-Docker:
-
-```bash
-sudo docker run --rm busybox:1.37   nslookup gitlab.int.romashlashes.by
-```
-
-Runner:
-
-```bash
-sudo gitlab-runner verify
-```
-
-## 25. Recovery
-
-### dns-01 unavailable
-
-Clients должны использовать `192.168.0.11`.
-
-Проверить:
-
-```bash
-dig @192.168.0.11 int.romashlashes.by SOA
-```
-
-После восстановления primary:
-
-```bash
-ansible-playbook   -i inventory/hosts.yml   playbooks/dns.yml   --ask-vault-pass
-```
-
-### dns-02 unavailable
-
-Primary продолжает обслуживать DNS.
-
-После восстановления secondary повторный `dns.yml` должен вернуть конфигурацию и transfer.
-
-### Оба DNS недоступны
-
-Так как обе VM пока на одном Proxmox host, physical host failure может отключить обе.
-
-Приоритет восстановления:
-
-1. Proxmox;
-2. `dns-01`;
-3. BIND primary;
-4. authoritative/public DNS;
-5. `dns-02`;
-6. zone transfer;
-7. clients.
-
-## 26. Security
-
-Не хранить в Git:
-
-```text
-plaintext TSIG
-Ansible Vault password
-private CA key
-GitLab Runner token
-Proxmox API token
-Terraform state
-```
-
-Recursion разрешать только доверенной LAN.
-
-Zone transfers — только secondary и только с TSIG.
-
-## 27. DHCP / IP
-
-Адреса:
+Docker workloads используют внутренние DNS-серверы:
 
 ```text
 192.168.0.10
 192.168.0.11
 ```
 
-не должны выдаваться другим устройствам.
+Это позволяет контейнерам использовать canonical service names без `extra_hosts`.
 
-Они должны быть либо вне DHCP pool, либо зарезервированы.
+## GitLab Runner
 
-## 28. Ограничения текущей схемы
+GitLab Runner на `ci-01` больше не использует `extra_hosts` для GitLab.
 
-1. Оба DNS находятся на одном Proxmox host.
-2. Public forwarding зависит от `192.168.0.1`.
-3. Compatibility namespace `romashlashes.test` всё ещё нужен части сервисов и сертификатов.
+Runner подключается к:
 
-## 29. Следующий этап — TLS и canonical namespace
+```text
+https://gitlab.int.romashlashes.by
+```
 
-Целевые имена:
+Проверка:
+
+```bash
+sudo gitlab-runner verify
+```
+
+## macOS client
+
+На Mac используется split DNS через `/etc/resolver`.
+
+Canonical resolver:
+
+```text
+/etc/resolver/int.romashlashes.by
+```
+
+Содержимое:
+
+```text
+nameserver 192.168.0.10
+nameserver 192.168.0.11
+```
+
+Проверка:
+
+```bash
+dscacheutil -q host -a name gitlab.int.romashlashes.by
+```
+
+После изменений DNS cache:
+
+```bash
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder
+```
+
+Временный resolver для `romashlashes.test` удалён.
+
+## Failover
+
+Клиенты настроены на два DNS-сервера:
+
+```text
+192.168.0.10
+192.168.0.11
+```
+
+Проверенный сценарий:
+
+```text
+dns-01 stopped
+      ↓
+systemd-resolved
+      ↓
+dns-02
+      ↓
+internal DNS works
+public recursion works
+Docker DNS works
+```
+
+Для теста:
+
+```bash
+sudo systemctl stop named
+```
+
+На клиенте:
+
+```bash
+resolvectl status
+getent ahostsv4 gitlab.int.romashlashes.by
+getent ahostsv4 deb.debian.org
+```
+
+После теста:
+
+```bash
+sudo systemctl start named
+```
+
+## Применение DNS role
+
+Перед применением:
+
+```bash
+cd ~/romashlashes.by/ansible
+ansible-lint
+```
+
+Syntax check:
+
+```bash
+ansible-playbook \
+  -i inventory/hosts.yml \
+  playbooks/dns.yml \
+  --syntax-check \
+  --ask-vault-pass
+```
+
+Применение:
+
+```bash
+ansible-playbook \
+  -i inventory/hosts.yml \
+  playbooks/dns.yml \
+  --ask-vault-pass
+```
+
+## Health checks внутренних сервисов
+
+GitLab:
+
+```bash
+curl -I https://gitlab.int.romashlashes.by/
+```
+
+Нормальный ответ:
+
+```text
+HTTP 302
+```
+
+Registry:
+
+```bash
+curl -I https://registry.int.romashlashes.by/v2/
+```
+
+Нормальный ответ без авторизации:
+
+```text
+HTTP 401
+```
+
+Registry authentication realm должен указывать на:
+
+```text
+https://gitlab.int.romashlashes.by/jwt/auth
+```
+
+Terraform mirror:
+
+```bash
+curl -fsS https://mirror.int.romashlashes.by/healthz
+```
+
+Ожидается:
+
+```text
+ok
+```
+
+DEV:
+
+```bash
+curl -I https://dev.int.romashlashes.by/
+```
+
+Ожидается:
+
+```text
+HTTP 200
+```
+
+## TLS и DNS
+
+Canonical DNS names:
 
 ```text
 gitlab.int.romashlashes.by
 registry.int.romashlashes.by
 mirror.int.romashlashes.by
+dev.int.romashlashes.by
 ```
 
-Рекомендуемый порядок:
+Проверка SAN:
 
-1. выпустить TLS certificates для canonical names;
-2. перевести GitLab;
-3. перевести Registry;
-4. перевести Terraform mirror;
-5. обновить GitLab Runner;
-6. обновить Docker trust paths;
-7. обновить Terraform network mirror;
-8. обновить GitLab CI configuration;
-9. прогнать полный pipeline;
-10. найти оставшиеся `.test` references;
-11. удалить compatibility zone только после полной миграции.
+```bash
+echo | openssl s_client \
+  -connect gitlab.int.romashlashes.by:443 \
+  -servername gitlab.int.romashlashes.by \
+  2>/dev/null |
+openssl x509 -noout -ext subjectAltName
+```
 
-## 30. Финальное подтверждённое состояние
+## История миграции namespace
+
+Изначально инфраструктура использовала временный namespace:
 
 ```text
-dns-01 primary                 OK
-dns-02 secondary               OK
-TSIG zone transfer             OK
-canonical zone                 OK
-compatibility zone             OK
-reverse DNS                    OK
-public recursive DNS           OK
-SOA synchronization            OK
-client rollout                 OK
-systemd-resolved integration   OK
-Docker DNS                     OK
-GitLab Runner DNS              OK
-primary -> secondary failover  OK
-/etc/hosts dependency removed  OK
-Runner extra_hosts removed     OK
-Ansible lint                   OK
-Ansible syntax checks          OK
-GitLab pipeline                OK
-GitLab push                    OK
-GitHub push                    OK
+romashlashes.test
 ```
 
-## 31. Общий принцип эксплуатации
+После внедрения централизованного BIND DNS был введён canonical namespace:
 
 ```text
-Git
- |
- v
-Terraform + Ansible
- |
- v
-Infrastructure
+int.romashlashes.by
 ```
 
-Ручные изменения допустимы только для диагностики и аварийного восстановления.
+Миграция выполнялась по схеме:
 
-Любое постоянное изменение должно быть возвращено в Terraform или Ansible и закоммичено в репозиторий.
+```text
+создать canonical DNS
+        ↓
+создать transition TLS certificates
+        ↓
+перевести GitLab
+        ↓
+перевести Registry
+        ↓
+перевести Runner
+        ↓
+перевести Terraform mirror
+        ↓
+перевести DEV
+        ↓
+проверить CI/CD
+        ↓
+удалить compatibility DNS
+        ↓
+удалить old SAN
+```
+
+После завершения миграции `romashlashes.test` больше не является active DNS zone.
+
+Проверка:
+
+```bash
+dig @192.168.0.10 gitlab.romashlashes.test A +short
+dig @192.168.0.11 gitlab.romashlashes.test A +short
+```
+
+Ожидаемый результат:
+
+```text
+<пусто>
+```
+
+## Troubleshooting
+
+BIND status:
+
+```bash
+sudo systemctl status named
+```
+
+Logs:
+
+```bash
+sudo journalctl -u named -n 100 --no-pager
+```
+
+Проверка конфигурации:
+
+```bash
+sudo /usr/bin/named-checkconf /etc/bind/named.conf
+```
+
+Проверка canonical zone на primary:
+
+```bash
+sudo /usr/bin/named-checkzone \
+  int.romashlashes.by \
+  /etc/bind/zones/db.int.romashlashes.by
+```
+
+Проверка порта 53:
+
+```bash
+sudo ss -lntup | grep ':53'
+```
+
+Проверка клиента:
+
+```bash
+resolvectl status
+getent ahostsv4 gitlab.int.romashlashes.by
+```
+
+Очистка cache:
+
+```bash
+sudo resolvectl flush-caches
+```
+
+## Recovery
+
+Если `dns-01` недоступен, клиенты должны использовать:
+
+```text
+192.168.0.11
+```
+
+Если `dns-02` недоступен, основной DNS работает через:
+
+```text
+192.168.0.10
+```
+
+Если оба DNS недоступны, внутренние service names перестанут разрешаться.
+
+После восстановления проверить:
+
+```bash
+dig @192.168.0.10 gitlab.int.romashlashes.by A +short
+```
+
+или:
+
+```bash
+dig @192.168.0.11 gitlab.int.romashlashes.by A +short
+```
+
+## Security
+
+TSIG secret:
+
+- хранится через Ansible Vault;
+- не выводится в терминал;
+- не хранится открытым текстом в Git;
+- используется для zone transfer между primary и secondary.
+
+TLS private keys:
+
+- не должны храниться в открытом Git repository;
+- локальные secret files исключаются из Git;
+- дальнейшая цель — централизованное управление через Vault/PKI.
+
+Recursive DNS должен быть доступен только доверенной сети.
+
+## Ограничения текущей архитектуры
+
+`dns-01` и `dns-02` находятся на одном физическом Proxmox host.
+
+Текущая схема защищает от:
+
+- остановки BIND;
+- сбоя одной DNS VM;
+- ошибки отдельной VM.
+
+Но не защищает от:
+
+- отказа Proxmox host;
+- отказа питания;
+- отказа физической сети этого host.
+
+В будущем secondary DNS можно вынести на другой физический узел.
+
+## Финальная проверка
+
+Canonical DNS:
+
+```bash
+for dns in 192.168.0.10 192.168.0.11; do
+  echo "=== $dns ==="
+  dig @"$dns" gitlab.int.romashlashes.by A +short
+  dig @"$dns" registry.int.romashlashes.by A +short
+  dig @"$dns" mirror.int.romashlashes.by A +short
+  dig @"$dns" dev.int.romashlashes.by A +short
+done
+```
+
+Public recursion:
+
+```bash
+dig @192.168.0.10 deb.debian.org A +short
+dig @192.168.0.11 deb.debian.org A +short
+```
+
+Reverse DNS:
+
+```bash
+dig @192.168.0.10 -x 192.168.0.187 +short
+dig @192.168.0.11 -x 192.168.0.187 +short
+```
+
+Retired namespace:
+
+```bash
+dig @192.168.0.10 gitlab.romashlashes.test A +short
+dig @192.168.0.11 gitlab.romashlashes.test A +short
+```
+
+Для retired namespace результат должен быть пустым.
+
+После DNS-проверок:
+
+```bash
+curl -I https://gitlab.int.romashlashes.by/
+curl -I https://registry.int.romashlashes.by/v2/
+curl -fsS https://mirror.int.romashlashes.by/healthz
+curl -I https://dev.int.romashlashes.by/
+```
+
+После успешных проверок инфраструктура считается работающей на canonical namespace `int.romashlashes.by`.
