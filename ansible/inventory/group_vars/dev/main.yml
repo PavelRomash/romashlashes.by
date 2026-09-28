@@ -4,18 +4,18 @@ app_postgres_user: romashlashes
 
 app_http_port: 80
 app_https_port: 443
-app_server_name: "dev.romashlashes.test"
+app_server_name: "dev.int.romashlashes.by"
 
 app_django_debug: false
 
 app_django_allowed_hosts:
-  - "dev.romashlashes.test"
+  - "dev.int.romashlashes.by"
   - "192.168.0.185"
   - "localhost"
   - "127.0.0.1"
 
 app_django_csrf_trusted_origins:
-  - "https://dev.romashlashes.test"
+  - "https://dev.int.romashlashes.by"
 
 app_django_secure_ssl_redirect: true
 app_django_session_cookie_secure: true

@@ -154,8 +154,7 @@ deploy-dev:
       --silent
       --show-error
       --insecure
-      --resolve dev.romashlashes.test:443:192.168.0.185
-      https://dev.romashlashes.test/
+      https://dev.int.romashlashes.by/
       --output /dev/null
 
     - >
@@ -164,8 +163,7 @@ deploy-dev:
       --silent
       --show-error
       --insecure
-      --resolve dev.romashlashes.test:443:192.168.0.185
-      https://dev.romashlashes.test/static/css/styles.css
+      https://dev.int.romashlashes.by/static/css/styles.css
       --output /dev/null
 
   rules:
