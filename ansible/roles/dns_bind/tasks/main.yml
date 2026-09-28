@@ -1,0 +1,146 @@
+---
+- name: Validate DNS server role
+  ansible.builtin.assert:
+    that:
+      - dns_bind_server_role in ["primary", "secondary"]
+      - dns_bind_tsig_secret is defined
+      - dns_bind_tsig_secret | length > 20
+    fail_msg: >-
+      dns_bind_server_role must be primary/secondary and
+      dns_bind_tsig_secret must come from Ansible Vault.
+
+- name: Install BIND packages
+  ansible.builtin.apt:
+    name: "{{ dns_bind_packages }}"
+    state: present
+    update_cache: true
+
+- name: Create BIND keys directory
+  ansible.builtin.file:
+    path: /etc/bind/keys
+    state: directory
+    owner: root
+    group: bind
+    mode: "0750"
+
+- name: Create BIND primary zone directory
+  ansible.builtin.file:
+    path: /etc/bind/zones
+    state: directory
+    owner: root
+    group: bind
+    mode: "0750"
+  when: dns_bind_server_role == "primary"
+
+- name: Install TSIG transfer key
+  ansible.builtin.template:
+    src: dns-xfr.key.j2
+    dest: /etc/bind/keys/dns-xfr.key
+    owner: root
+    group: bind
+    mode: "0640"
+  no_log: true
+  notify: Restart named
+
+- name: Configure BIND options
+  ansible.builtin.template:
+    src: named.conf.options.j2
+    dest: /etc/bind/named.conf.options
+    owner: root
+    group: bind
+    mode: "0644"
+    validate: /usr/bin/named-checkconf %s
+  notify: Restart named
+
+- name: Install canonical primary zone
+  ansible.builtin.template:
+    src: db.int.romashlashes.by.j2
+    dest: /etc/bind/zones/db.int.romashlashes.by
+    owner: root
+    group: bind
+    mode: "0640"
+    validate: >-
+      /usr/bin/named-checkzone
+      int.romashlashes.by
+      %s
+  when: dns_bind_server_role == "primary"
+  notify: Restart named
+
+- name: Install compatibility primary zone
+  ansible.builtin.template:
+    src: db.romashlashes.test.j2
+    dest: /etc/bind/zones/db.romashlashes.test
+    owner: root
+    group: bind
+    mode: "0640"
+    validate: >-
+      /usr/bin/named-checkzone
+      romashlashes.test
+      %s
+  when: dns_bind_server_role == "primary"
+  notify: Restart named
+
+- name: Install reverse primary zone
+  ansible.builtin.template:
+    src: db.0.168.192.j2
+    dest: /etc/bind/zones/db.0.168.192
+    owner: root
+    group: bind
+    mode: "0640"
+    validate: >-
+      /usr/bin/named-checkzone
+      0.168.192.in-addr.arpa
+      %s
+  when: dns_bind_server_role == "primary"
+  notify: Restart named
+
+- name: Configure local zones
+  ansible.builtin.template:
+    src: named.conf.local.j2
+    dest: /etc/bind/named.conf.local
+    owner: root
+    group: bind
+    mode: "0644"
+    validate: /usr/bin/named-checkconf %s
+  notify: Restart named
+
+- name: Validate complete BIND configuration
+  ansible.builtin.command:
+    cmd: /usr/bin/named-checkconf /etc/bind/named.conf
+  changed_when: false
+
+- name: Enable and start named
+  ansible.builtin.service:
+    name: "{{ dns_bind_service_name }}"
+    enabled: true
+    state: started
+
+- name: Apply pending BIND restart
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for local DNS service
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 53
+    timeout: 30
+
+- name: Verify canonical zone locally
+  ansible.builtin.command:
+    cmd: >-
+      dig @127.0.0.1
+      gitlab.int.romashlashes.by
+      A +short
+  register: dns_bind_canonical_check
+  changed_when: false
+  retries: 10
+  delay: 2
+  until: "'192.168.0.187' in dns_bind_canonical_check.stdout_lines"
+
+- name: Verify public recursive lookup locally
+  ansible.builtin.command:
+    cmd: dig @127.0.0.1 deb.debian.org A +short
+  register: dns_bind_recursive_check
+  changed_when: false
+  retries: 5
+  delay: 2
+  until: dns_bind_recursive_check.stdout | length > 0

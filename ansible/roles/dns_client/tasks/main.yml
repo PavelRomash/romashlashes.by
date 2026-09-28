@@ -1,0 +1,74 @@
+---
+- name: Check that Netplan is installed
+  ansible.builtin.stat:
+    path: /usr/sbin/netplan
+  register: dns_client_netplan_binary
+
+- name: Verify Netplan binary exists
+  ansible.builtin.assert:
+    that:
+      - dns_client_netplan_binary.stat.exists
+      - dns_client_netplan_binary.stat.executable
+    fail_msg: Netplan is not installed or is not executable.
+
+- name: Install internal DNS Netplan override
+  ansible.builtin.template:
+    src: 60-internal-dns.yaml.j2
+    dest: "{{ dns_client_netplan_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Apply netplan
+
+- name: Validate merged Netplan configuration
+  ansible.builtin.command:
+    cmd: netplan generate
+  changed_when: false
+
+- name: Apply pending Netplan change
+  ansible.builtin.meta: flush_handlers
+
+- name: Read resolver state
+  ansible.builtin.command:
+    cmd: resolvectl dns {{ dns_client_interface }}
+  register: dns_client_resolver_state
+  changed_when: false
+
+- name: Verify internal resolvers are active
+  ansible.builtin.assert:
+    that:
+      - "'192.168.0.10' in dns_client_resolver_state.stdout"
+      - "'192.168.0.11' in dns_client_resolver_state.stdout"
+
+- name: Resolve compatibility GitLab name
+  ansible.builtin.command:
+    cmd: getent ahostsv4 gitlab.romashlashes.test
+  register: dns_client_gitlab_lookup
+  changed_when: false
+
+- name: Verify compatibility GitLab address
+  ansible.builtin.assert:
+    that:
+      - "'192.168.0.187' in dns_client_gitlab_lookup.stdout"
+
+- name: Resolve canonical GitLab name
+  ansible.builtin.command:
+    cmd: getent ahostsv4 gitlab.int.romashlashes.by
+  register: dns_client_canonical_lookup
+  changed_when: false
+
+- name: Verify canonical GitLab address
+  ansible.builtin.assert:
+    that:
+      - "'192.168.0.187' in dns_client_canonical_lookup.stdout"
+
+- name: Resolve public name
+  ansible.builtin.command:
+    cmd: getent ahostsv4 github.com
+  register: dns_client_public_lookup
+  changed_when: false
+
+- name: Verify public DNS resolution
+  ansible.builtin.assert:
+    that:
+      - dns_client_public_lookup.stdout | length > 0

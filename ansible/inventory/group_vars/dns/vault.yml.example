@@ -1,0 +1,4 @@
+---
+# Encrypt the real file with ansible-vault.
+# Do not commit a plaintext secret.
+dns_bind_tsig_secret: "REPLACE_WITH_BASE64_SECRET"

@@ -1,0 +1,32 @@
+acl "trusted-lan" {
+    127.0.0.1;
+    {{ dns_bind_lan_cidr }};
+};
+
+options {
+    directory "/var/cache/bind";
+
+    listen-on {
+        127.0.0.1;
+        {{ ansible_host }};
+    };
+    listen-on-v6 { none; };
+
+    recursion yes;
+    allow-query { trusted-lan; };
+    allow-recursion { trusted-lan; };
+    allow-query-cache { trusted-lan; };
+    allow-transfer { none; };
+
+    forwarders {
+{% for forwarder in dns_bind_forwarders %}
+        {{ forwarder }};
+{% endfor %}
+    };
+    forward first;
+
+    dnssec-validation auto;
+    minimal-responses yes;
+    auth-nxdomain no;
+    version "not disclosed";
+};

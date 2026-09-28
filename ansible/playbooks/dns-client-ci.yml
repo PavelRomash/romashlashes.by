@@ -1,0 +1,7 @@
+---
+- name: Configure internal DNS on CI canary
+  hosts: ci
+  become: true
+  gather_facts: false
+  roles:
+    - dns_client

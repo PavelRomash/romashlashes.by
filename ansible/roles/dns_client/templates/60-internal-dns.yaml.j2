@@ -1,0 +1,15 @@
+network:
+  version: 2
+  ethernets:
+    {{ dns_client_interface }}:
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses:
+{% for server in dns_client_servers %}
+          - {{ server }}
+{% endfor %}
+        search:
+{% for domain in dns_client_search_domains %}
+          - {{ domain }}
+{% endfor %}

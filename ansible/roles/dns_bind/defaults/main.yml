@@ -1,0 +1,25 @@
+---
+dns_bind_packages:
+  - bind9
+  - bind9-utils
+  - bind9-dnsutils
+
+dns_bind_service_name: named
+dns_bind_lan_cidr: "192.168.0.0/24"
+dns_bind_primary_ip: "192.168.0.10"
+dns_bind_secondary_ip: "192.168.0.11"
+dns_bind_forwarders:
+  - "192.168.0.1"
+
+dns_bind_canonical_zone: "int.romashlashes.by"
+dns_bind_compatibility_zone: "romashlashes.test"
+dns_bind_reverse_zone: "0.168.192.in-addr.arpa"
+
+dns_bind_zone_serial: "2026092701"
+dns_bind_zone_refresh: 3600
+dns_bind_zone_retry: 900
+dns_bind_zone_expire: 1209600
+dns_bind_zone_minimum: 300
+
+dns_bind_tsig_key_name: "dns-xfr-key"
+dns_bind_tsig_algorithm: "hmac-sha256"

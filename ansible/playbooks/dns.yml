@@ -1,0 +1,16 @@
+---
+- name: Configure primary internal DNS
+  hosts: dns_primary
+  become: true
+  gather_facts: true
+
+  roles:
+    - dns_bind
+
+- name: Configure secondary internal DNS
+  hosts: dns_secondary
+  become: true
+  gather_facts: true
+
+  roles:
+    - dns_bind

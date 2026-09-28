@@ -1,0 +1,9 @@
+---
+- name: Configure internal DNS on infrastructure clients
+  hosts: dev:stage:prod:ci:gitlab:mirror
+  serial: 1
+  become: true
+  gather_facts: false
+
+  roles:
+    - dns_client

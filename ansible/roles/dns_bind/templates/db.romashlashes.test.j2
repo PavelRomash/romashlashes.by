@@ -1,0 +1,18 @@
+$TTL 300
+@ IN SOA dns-01.int.romashlashes.by. hostmaster.int.romashlashes.by. (
+    {{ dns_bind_zone_serial }} ; serial
+    {{ dns_bind_zone_refresh }} ; refresh
+    {{ dns_bind_zone_retry }} ; retry
+    {{ dns_bind_zone_expire }} ; expire
+    {{ dns_bind_zone_minimum }} ; negative cache TTL
+)
+
+@        IN NS dns-01.int.romashlashes.by.
+@        IN NS dns-02.int.romashlashes.by.
+
+dev      IN A 192.168.0.185
+stage    IN A 192.168.0.184
+prod     IN A 192.168.0.183
+gitlab   IN A 192.168.0.187
+registry IN A 192.168.0.187
+mirror   IN A 192.168.0.188
