@@ -66,20 +66,6 @@
   when: dns_bind_server_role == "primary"
   notify: Restart named
 
-- name: Install compatibility primary zone
-  ansible.builtin.template:
-    src: db.romashlashes.test.j2
-    dest: /etc/bind/zones/db.romashlashes.test
-    owner: root
-    group: bind
-    mode: "0640"
-    validate: >-
-      /usr/bin/named-checkzone
-      romashlashes.test
-      %s
-  when: dns_bind_server_role == "primary"
-  notify: Restart named
-
 - name: Install reverse primary zone
   ansible.builtin.template:
     src: db.0.168.192.j2

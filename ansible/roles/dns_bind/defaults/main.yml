@@ -12,7 +12,6 @@ dns_bind_forwarders:
   - "192.168.0.1"
 
 dns_bind_canonical_zone: "int.romashlashes.by"
-dns_bind_compatibility_zone: "romashlashes.test"
 dns_bind_reverse_zone: "0.168.192.in-addr.arpa"
 
 dns_bind_zone_serial: "2026092701"

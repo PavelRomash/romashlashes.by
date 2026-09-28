@@ -10,15 +10,6 @@ zone "{{ dns_bind_canonical_zone }}" {
     };
 };
 
-zone "{{ dns_bind_compatibility_zone }}" {
-    type primary;
-    file "/etc/bind/zones/db.romashlashes.test";
-    allow-transfer { key "{{ dns_bind_tsig_key_name }}"; };
-    also-notify {
-        {{ dns_bind_secondary_ip }} key "{{ dns_bind_tsig_key_name }}";
-    };
-};
-
 zone "{{ dns_bind_reverse_zone }}" {
     type primary;
     file "/etc/bind/zones/db.0.168.192";
@@ -34,14 +25,6 @@ zone "{{ dns_bind_canonical_zone }}" {
         {{ dns_bind_primary_ip }} key "{{ dns_bind_tsig_key_name }}";
     };
     file "/var/cache/bind/db.int.romashlashes.by";
-};
-
-zone "{{ dns_bind_compatibility_zone }}" {
-    type secondary;
-    primaries {
-        {{ dns_bind_primary_ip }} key "{{ dns_bind_tsig_key_name }}";
-    };
-    file "/var/cache/bind/db.romashlashes.test";
 };
 
 zone "{{ dns_bind_reverse_zone }}" {
