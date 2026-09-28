@@ -1,0 +1,8 @@
+---
+- name: Configure GitLab Runner canonical DNS and TLS
+  hosts: ci
+  become: true
+  gather_facts: false
+
+  roles:
+    - gitlab_runner_client

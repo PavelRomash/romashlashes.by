@@ -1,6 +1,6 @@
 provider_installation {
   network_mirror {
-    url     = "https://mirror.romashlashes.test/providers/"
+    url     = "https://mirror.int.romashlashes.by/providers/"
     include = ["registry.terraform.io/bpg/proxmox"]
   }
 

@@ -1,0 +1,91 @@
+---
+- name: Check GitLab Runner configuration
+  ansible.builtin.stat:
+    path: "{{ gitlab_runner_client_config_path }}"
+  register: gitlab_runner_client_config
+
+- name: Verify GitLab Runner configuration exists
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_client_config.stat.exists
+      - gitlab_runner_client_config.stat.isreg
+
+- name: Create GitLab Runner certificate directory
+  ansible.builtin.file:
+    path: /etc/gitlab-runner/certs
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install internal CA for GitLab Runner
+  ansible.builtin.copy:
+    src: "{{ gitlab_runner_client_ca_src }}"
+    dest: "{{ gitlab_runner_client_ca_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart GitLab Runner
+
+- name: Configure canonical GitLab coordinator URL
+  ansible.builtin.lineinfile:
+    path: "{{ gitlab_runner_client_config_path }}"
+    regexp: '^[[:space:]]*url[[:space:]]*='
+    line: '  url = "{{ gitlab_runner_client_url }}"'
+    create: false
+  notify: Restart GitLab Runner
+
+- name: Configure GitLab Runner CA path
+  ansible.builtin.lineinfile:
+    path: "{{ gitlab_runner_client_config_path }}"
+    regexp: '^[[:space:]]*tls-ca-file[[:space:]]*='
+    line: '  tls-ca-file = "{{ gitlab_runner_client_ca_dest }}"'
+    insertafter: '^[[:space:]]*url[[:space:]]*='
+    create: false
+  notify: Restart GitLab Runner
+
+- name: Create Docker trust directory for canonical Registry
+  ansible.builtin.file:
+    path: "/etc/docker/certs.d/{{ gitlab_runner_client_registry_host }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install internal CA for canonical Registry
+  ansible.builtin.copy:
+    src: "{{ gitlab_runner_client_ca_src }}"
+    dest: "{{ gitlab_runner_client_docker_ca_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply pending GitLab Runner restart
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify canonical GitLab DNS
+  ansible.builtin.command:
+    cmd: getent ahostsv4 gitlab.int.romashlashes.by
+  register: gitlab_runner_client_dns
+  changed_when: false
+
+- name: Check canonical GitLab address
+  ansible.builtin.assert:
+    that:
+      - "'192.168.0.187' in gitlab_runner_client_dns.stdout"
+
+- name: Verify GitLab Runner registration
+  ansible.builtin.command:
+    cmd: gitlab-runner verify
+  register: gitlab_runner_client_verify
+  changed_when: false
+
+- name: Check GitLab Runner verification result
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_client_verify.rc == 0
+    fail_msg: >-
+      GitLab Runner verification failed. stdout:
+      {{ gitlab_runner_client_verify.stdout }}
+      stderr:
+      {{ gitlab_runner_client_verify.stderr }}

@@ -67,6 +67,7 @@ terraform-check:
 
   before_script:
     - cd terraform/proxmox
+    - export TF_CLI_CONFIG_FILE="$CI_PROJECT_DIR/ci/terraform/terraform.tfrc"
     - terraform version
 
   script:

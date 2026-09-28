@@ -1,0 +1,7 @@
+---
+gitlab_runner_client_url: "https://gitlab.int.romashlashes.by"
+gitlab_runner_client_config_path: "/etc/gitlab-runner/config.toml"
+gitlab_runner_client_ca_src: "{{ inventory_dir }}/../.secrets/gitlab/romashlashes-rootCA.crt"
+gitlab_runner_client_ca_dest: "/etc/gitlab-runner/certs/romashlashes-rootCA.crt"
+gitlab_runner_client_registry_host: "registry.int.romashlashes.by"
+gitlab_runner_client_docker_ca_dest: "/etc/docker/certs.d/{{ gitlab_runner_client_registry_host }}/ca.crt"
