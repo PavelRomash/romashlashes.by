@@ -127,7 +127,9 @@ deploy-dev:
 
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends openssh-client git curl
+    - apt-get install -y --no-install-recommends openssh-client git curl ca-certificates
+    - cp "$CI_PROJECT_DIR/ci/ca/romashlashes-internal-ca.crt" /usr/local/share/ca-certificates/romashlashes-internal-ca.crt
+    - update-ca-certificates
     - pip install --no-cache-dir ansible
 
     - mkdir -p ~/.ssh
@@ -154,7 +156,6 @@ deploy-dev:
       --fail
       --silent
       --show-error
-      --insecure
       https://dev.int.romashlashes.by/
       --output /dev/null
 
@@ -163,7 +164,6 @@ deploy-dev:
       --fail
       --silent
       --show-error
-      --insecure
       https://dev.int.romashlashes.by/static/css/styles.css
       --output /dev/null
 
@@ -173,9 +173,11 @@ deploy-dev:
         - app/**/*
         - ansible/ansible.cfg
         - ansible/inventory/hosts.yml
+        - ansible/inventory/group_vars/app/**/*
         - ansible/inventory/group_vars/dev/**/*
         - ansible/playbooks/deploy-dev.yml
         - ansible/roles/app_deploy/**/*
+        - ci/ca/**/*
         - .gitlab-ci.yml
       when: manual
 
@@ -189,7 +191,9 @@ deploy-stage:
 
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends openssh-client git curl
+    - apt-get install -y --no-install-recommends openssh-client git curl ca-certificates
+    - cp "$CI_PROJECT_DIR/ci/ca/romashlashes-internal-ca.crt" /usr/local/share/ca-certificates/romashlashes-internal-ca.crt
+    - update-ca-certificates
     - pip install --no-cache-dir ansible
 
     - mkdir -p ~/.ssh
@@ -216,7 +220,6 @@ deploy-stage:
       --fail
       --silent
       --show-error
-      --insecure
       https://stage.int.romashlashes.by/
       --output /dev/null
 
@@ -225,7 +228,6 @@ deploy-stage:
       --fail
       --silent
       --show-error
-      --insecure
       https://stage.int.romashlashes.by/static/css/styles.css
       --output /dev/null
 
@@ -239,5 +241,6 @@ deploy-stage:
         - ansible/inventory/group_vars/stage/**/*
         - ansible/playbooks/deploy-stage.yml
         - ansible/roles/app_deploy/**/*
+        - ci/ca/**/*
         - .gitlab-ci.yml
       when: manual
