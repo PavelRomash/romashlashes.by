@@ -1,0 +1,11 @@
+---
+app_postgres_db: romashlashes
+app_postgres_user: romashlashes
+
+app_https_port: 443
+
+app_django_debug: false
+
+app_django_secure_ssl_redirect: true
+app_django_session_cookie_secure: true
+app_django_csrf_cookie_secure: true

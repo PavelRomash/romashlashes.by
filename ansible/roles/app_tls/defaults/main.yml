@@ -1,0 +1,9 @@
+---
+app_tls_source_dir: "{{ inventory_dir }}/../.secrets/app-tls"
+app_tls_dest_dir: /opt/romashlashes/nginx/certs
+
+app_tls_cert_src: "{{ app_tls_source_dir }}/{{ app_server_name }}.pem"
+app_tls_key_src: "{{ app_tls_source_dir }}/{{ app_server_name }}-key.pem"
+
+app_tls_cert_dest: "{{ app_tls_dest_dir }}/{{ app_server_name }}.pem"
+app_tls_key_dest: "{{ app_tls_dest_dir }}/{{ app_server_name }}-key.pem"

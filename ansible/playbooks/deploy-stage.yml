@@ -1,0 +1,23 @@
+---
+- name: Build deployment artifact
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Create application archive from Git  # noqa command-instead-of-module
+      ansible.builtin.command:
+        cmd: >
+          git archive
+          --format=tar.gz
+          --output=/tmp/romashlashes-app.tar.gz
+          HEAD:app
+        chdir: "{{ playbook_dir }}/../.."
+      changed_when: true
+
+
+- name: Deploy Romash Lashes to STAGE
+  hosts: stage
+  become: true
+
+  roles:
+    - app_deploy

@@ -1,0 +1,25 @@
+---
+- name: Create application TLS directory
+  ansible.builtin.file:
+    path: "{{ app_tls_dest_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install application TLS certificate
+  ansible.builtin.copy:
+    src: "{{ app_tls_cert_src }}"
+    dest: "{{ app_tls_cert_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install application TLS private key
+  ansible.builtin.copy:
+    src: "{{ app_tls_key_src }}"
+    dest: "{{ app_tls_key_dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true

@@ -14,7 +14,7 @@
     owner: root
     group: root
 
-- name: Configure DEV nginx
+- name: Configure application nginx
   ansible.builtin.template:
     src: nginx.conf.j2
     dest: "{{ app_deploy_path }}/nginx/default.conf"

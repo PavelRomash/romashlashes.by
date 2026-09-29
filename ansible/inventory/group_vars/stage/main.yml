@@ -1,14 +1,14 @@
 ---
-app_server_name: "dev.int.romashlashes.by"
+app_server_name: "stage.int.romashlashes.by"
 
 app_django_allowed_hosts:
-  - "dev.int.romashlashes.by"
-  - "192.168.0.185"
+  - "stage.int.romashlashes.by"
+  - "192.168.0.184"
   - "localhost"
   - "127.0.0.1"
 
 app_django_csrf_trusted_origins:
-  - "https://dev.int.romashlashes.by"
+  - "https://stage.int.romashlashes.by"
 
 app_django_secure_hsts_seconds: 0
 app_django_secure_hsts_include_subdomains: false

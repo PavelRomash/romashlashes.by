@@ -1,0 +1,17 @@
+---
+- name: Ensure CI deployment user SSH directory exists
+  ansible.builtin.file:
+    path: "/home/{{ ci_deploy_access_user }}/.ssh"
+    state: directory
+    owner: "{{ ci_deploy_access_user }}"
+    group: "{{ ci_deploy_access_group }}"
+    mode: "0700"
+
+- name: Authorize GitLab CI deployment public key
+  ansible.builtin.lineinfile:
+    path: "/home/{{ ci_deploy_access_user }}/.ssh/authorized_keys"
+    line: "{{ lookup('ansible.builtin.file', role_path ~ '/files/romashlashes-ci-rsa.pub') }}"
+    create: true
+    owner: "{{ ci_deploy_access_user }}"
+    group: "{{ ci_deploy_access_group }}"
+    mode: "0600"

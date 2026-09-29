@@ -1,0 +1,7 @@
+---
+- name: Install application TLS certificates
+  hosts: app
+  become: true
+
+  roles:
+    - app_tls

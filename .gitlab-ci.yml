@@ -50,6 +50,7 @@ django-check:
         - app/**/*
         - ansible/ansible.cfg
         - ansible/inventory/hosts.yml
+        - ansible/inventory/group_vars/app/**/*
         - ansible/inventory/group_vars/dev/**/*
         - ansible/playbooks/deploy-dev.yml
         - ansible/roles/app_deploy/**/*
@@ -174,6 +175,69 @@ deploy-dev:
         - ansible/inventory/hosts.yml
         - ansible/inventory/group_vars/dev/**/*
         - ansible/playbooks/deploy-dev.yml
+        - ansible/roles/app_deploy/**/*
+        - .gitlab-ci.yml
+      when: manual
+
+deploy-stage:
+  stage: deploy
+  image: python:3.14-slim
+
+  tags:
+    - docker
+    - dev
+
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends openssh-client git curl
+    - pip install --no-cache-dir ansible
+
+    - mkdir -p ~/.ssh
+    - tr -d '\r' < "$ANSIBLE_SSH_PRIVATE_KEY" > ~/.ssh/romashlashes-ci
+    - printf '\n' >> ~/.ssh/romashlashes-ci
+    - chmod 600 ~/.ssh/romashlashes-ci
+    - ssh-keygen -y -f ~/.ssh/romashlashes-ci > /dev/null
+    - ssh-keyscan -H 192.168.0.184 >> ~/.ssh/known_hosts
+    - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci
+
+    - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
+    - export ANSIBLE_ROLES_PATH="$CI_PROJECT_DIR/ansible/roles"
+
+  script:
+    - cd "$CI_PROJECT_DIR/ansible"
+    - >
+      ansible-playbook
+      -i inventory/hosts.yml
+      playbooks/deploy-stage.yml
+      --vault-password-file "$ANSIBLE_VAULT_PASSWORD"
+
+    - >
+      curl
+      --fail
+      --silent
+      --show-error
+      --insecure
+      https://stage.int.romashlashes.by/
+      --output /dev/null
+
+    - >
+      curl
+      --fail
+      --silent
+      --show-error
+      --insecure
+      https://stage.int.romashlashes.by/static/css/styles.css
+      --output /dev/null
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - app/**/*
+        - ansible/ansible.cfg
+        - ansible/inventory/hosts.yml
+        - ansible/inventory/group_vars/app/**/*
+        - ansible/inventory/group_vars/stage/**/*
+        - ansible/playbooks/deploy-stage.yml
         - ansible/roles/app_deploy/**/*
         - .gitlab-ci.yml
       when: manual

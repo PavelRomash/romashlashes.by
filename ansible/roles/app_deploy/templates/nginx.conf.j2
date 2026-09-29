@@ -9,8 +9,8 @@ server {
     listen 443 ssl;
     server_name {{ app_server_name }};
 
-    ssl_certificate /etc/nginx/certs/dev.int.romashlashes.by.pem;
-    ssl_certificate_key /etc/nginx/certs/dev.int.romashlashes.by-key.pem;
+    ssl_certificate /etc/nginx/certs/{{ app_server_name }}.pem;
+    ssl_certificate_key /etc/nginx/certs/{{ app_server_name }}-key.pem;
 
     client_max_body_size 20M;
 
