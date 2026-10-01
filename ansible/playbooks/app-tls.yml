@@ -1,6 +1,6 @@
 ---
-- name: Install application TLS certificates
-  hosts: app
+- name: Install internal application TLS certificates
+  hosts: dev:stage
   become: true
 
   roles:
