@@ -268,7 +268,8 @@ deploy-prod:
     - ansible-galaxy collection install -r "$CI_PROJECT_DIR/ansible/requirements.yml"
 
     - mkdir -p ~/.ssh
-    - printf '%s' "$ANSIBLE_PROD_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/romashlashes-ci-prod
+    - tr -d '\r' < "$ANSIBLE_PROD_SSH_PRIVATE_KEY" > ~/.ssh/romashlashes-ci-prod
+    - printf '\n' >> ~/.ssh/romashlashes-ci-prod
     - chmod 600 ~/.ssh/romashlashes-ci-prod
     - ssh-keygen -y -f ~/.ssh/romashlashes-ci-prod > /dev/null
     - install -m 0644 "$CI_PROJECT_DIR/ci/ssh/prod_known_hosts" ~/.ssh/known_hosts
