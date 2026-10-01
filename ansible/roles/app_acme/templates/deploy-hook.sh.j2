@@ -23,7 +23,23 @@ KEY_SOURCE="${RENEWED_LINEAGE}/privkey.pem"
 
 CERT_DEST="{{ app_acme_nginx_cert_dest }}"
 KEY_DEST="{{ app_acme_nginx_key_dest }}"
-NGINX_CONTAINER="{{ app_acme_nginx_container }}"
+
+COMPOSE_PROJECT_DIR="{{ app_acme_compose_project_dir }}"
+NGINX_SERVICE="{{ app_acme_nginx_service }}"
+
+if [ ! -r "$CERT_SOURCE" ] || [ ! -r "$KEY_SOURCE" ]; then
+    echo "Certificate lineage is incomplete: $RENEWED_LINEAGE" >&2
+    exit 1
+fi
+
+# Avoid unnecessary nginx reloads if the deployed certificate is already current.
+if [ -f "$CERT_DEST" ] &&
+   [ -f "$KEY_DEST" ] &&
+   cmp -s "$CERT_SOURCE" "$CERT_DEST" &&
+   cmp -s "$KEY_SOURCE" "$KEY_DEST"
+then
+    exit 0
+fi
 
 CERT_TMP="$(mktemp "${CERT_DEST}.tmp.XXXXXX")"
 KEY_TMP="$(mktemp "${KEY_DEST}.tmp.XXXXXX")"
@@ -81,18 +97,31 @@ if ! mv -f "$KEY_TMP" "$KEY_DEST"; then
     exit 1
 fi
 
-if [ -n "$("$DOCKER_BIN" ps -q --filter "name=^/${NGINX_CONTAINER}$")" ]; then
-    if ! "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -t; then
+cd "$COMPOSE_PROJECT_DIR"
+
+NGINX_CONTAINER_ID="$(
+    "$DOCKER_BIN" compose ps --status running -q "$NGINX_SERVICE"
+)"
+
+if [ -n "$NGINX_CONTAINER_ID" ]; then
+    if ! "$DOCKER_BIN" compose \
+        exec -T "$NGINX_SERVICE" nginx -t
+    then
         restore_previous
         echo "New certificate rejected by nginx configuration test" >&2
         exit 1
     fi
 
-    if ! "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -s reload; then
+    if ! "$DOCKER_BIN" compose \
+        exec -T "$NGINX_SERVICE" nginx -s reload
+    then
         restore_previous
 
-        "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -t || true
-        "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -s reload || true
+        "$DOCKER_BIN" compose \
+            exec -T "$NGINX_SERVICE" nginx -t || true
+
+        "$DOCKER_BIN" compose \
+            exec -T "$NGINX_SERVICE" nginx -s reload || true
 
         echo "Nginx reload failed; previous certificate restored" >&2
         exit 1

@@ -13,9 +13,10 @@ app_acme_nginx_cert_dest: >-
 app_acme_nginx_key_dest: >-
   {{ app_acme_nginx_cert_dir }}/{{ app_server_name }}-key.pem
 
-app_acme_nginx_container: romashlashes-nginx
+app_acme_compose_project_dir: /opt/romashlashes
+app_acme_nginx_service: nginx
 
 app_acme_deploy_hook_path: >-
   /etc/letsencrypt/renewal-hooks/deploy/50-romashlashes-nginx
 
-app_acme_issue_certificate: false
+app_acme_operation: bootstrap

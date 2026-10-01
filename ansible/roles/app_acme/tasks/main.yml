@@ -1,4 +1,13 @@
 ---
+- name: Validate ACME operation
+  ansible.builtin.assert:
+    that:
+      - app_acme_operation in
+        ['bootstrap', 'validate-staging', 'issue', 'validate-renewal']
+    fail_msg: >-
+      app_acme_operation must be one of:
+      bootstrap, validate-staging, issue, validate-renewal.
+
 - name: Validate ACME domain configuration
   ansible.builtin.assert:
     that:
@@ -56,16 +65,32 @@
     path: "/etc/letsencrypt/live/{{ app_acme_cert_name }}/fullchain.pem"
   register: app_acme_certificate
 
-- name: Validate certificate issuance configuration
+- name: Validate ACME account configuration
   ansible.builtin.assert:
     that:
       - app_acme_email | length > 0
-    fail_msg: app_acme_email must be configured before certificate issuance.
-  when:
-    - app_acme_issue_certificate
-    - not app_acme_certificate.stat.exists
+    fail_msg: >-
+      app_acme_email must be configured for staging validation
+      or production certificate issuance.
+  when: app_acme_operation in ['validate-staging', 'issue']
 
-- name: Test initial certificate issuance against Let's Encrypt staging
+- name: Check running nginx Compose service
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - ps
+      - --status
+      - running
+      - -q
+      - "{{ app_acme_nginx_service }}"
+    chdir: "{{ app_acme_compose_project_dir }}"
+  register: app_acme_nginx_service_state
+  changed_when: false
+  failed_when: app_acme_nginx_service_state.stdout | trim | length == 0
+  when: app_acme_operation != 'bootstrap'
+
+- name: Validate certificate issuance against Let's Encrypt staging
   ansible.builtin.command:
     argv:
       - certbot
@@ -83,11 +108,9 @@
       - "{{ app_acme_email }}"
       - --dry-run
   changed_when: false
-  when:
-    - app_acme_issue_certificate
-    - not app_acme_certificate.stat.exists
+  when: app_acme_operation == 'validate-staging'
 
-- name: Obtain initial Let's Encrypt certificate
+- name: Ensure Let's Encrypt production certificate matches desired domains
   ansible.builtin.command:
     argv:
       - certbot
@@ -103,13 +126,37 @@
       - --agree-tos
       - --email
       - "{{ app_acme_email }}"
-    creates: "/etc/letsencrypt/live/{{ app_acme_cert_name }}/fullchain.pem"
-  register: app_acme_initial_issuance
-  when:
-    - app_acme_issue_certificate
-    - not app_acme_certificate.stat.exists
+      - --keep-until-expiring
+      - --renew-with-new-domains
+  changed_when: true
+  when: app_acme_operation == 'issue'
 
-- name: Validate automatic renewal and deploy hook
+- name: Refresh Let's Encrypt certificate state
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ app_acme_cert_name }}/fullchain.pem"
+  register: app_acme_certificate_after_operation
+  when: app_acme_operation in ['issue', 'validate-renewal']
+
+- name: Require production certificate for requested operation
+  ansible.builtin.assert:
+    that:
+      - app_acme_certificate_after_operation.stat.exists
+    fail_msg: >-
+      Production certificate does not exist for
+      {{ app_acme_cert_name }}.
+  when: app_acme_operation in ['issue', 'validate-renewal']
+
+- name: Ensure current production certificate is deployed to nginx
+  ansible.builtin.command:
+    argv:
+      - "{{ app_acme_deploy_hook_path }}"
+  environment:
+    RENEWED_LINEAGE: "/etc/letsencrypt/live/{{ app_acme_cert_name }}"
+    RENEWED_DOMAINS: "{{ app_acme_domains | join(' ') }}"
+  changed_when: false
+  when: app_acme_operation == 'issue'
+
+- name: Validate automatic certificate renewal and deploy hook
   ansible.builtin.command:
     argv:
       - certbot
@@ -119,6 +166,4 @@
       - --dry-run
       - --run-deploy-hooks
   changed_when: false
-  when:
-    - app_acme_initial_issuance is defined
-    - app_acme_initial_issuance is changed
+  when: app_acme_operation == 'validate-renewal'
