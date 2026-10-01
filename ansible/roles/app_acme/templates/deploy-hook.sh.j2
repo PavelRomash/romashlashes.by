@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+umask 077
+
+EXPECTED_LINEAGE="/etc/letsencrypt/live/{{ app_acme_cert_name }}"
+
+if [ -z "${RENEWED_LINEAGE:-}" ]; then
+    echo "RENEWED_LINEAGE is not set" >&2
+    exit 1
+fi
+
+# This hook is installed in Certbot's global deploy-hook directory.
+# Ignore certificates not owned by this role.
+if [ "$RENEWED_LINEAGE" != "$EXPECTED_LINEAGE" ]; then
+    exit 0
+fi
+
+DOCKER_BIN="$(command -v docker)"
+
+CERT_SOURCE="${RENEWED_LINEAGE}/fullchain.pem"
+KEY_SOURCE="${RENEWED_LINEAGE}/privkey.pem"
+
+CERT_DEST="{{ app_acme_nginx_cert_dest }}"
+KEY_DEST="{{ app_acme_nginx_key_dest }}"
+NGINX_CONTAINER="{{ app_acme_nginx_container }}"
+
+CERT_TMP="$(mktemp "${CERT_DEST}.tmp.XXXXXX")"
+KEY_TMP="$(mktemp "${KEY_DEST}.tmp.XXXXXX")"
+
+CERT_BACKUP="${CERT_DEST}.rollback.$$"
+KEY_BACKUP="${KEY_DEST}.rollback.$$"
+
+HAD_CERT=0
+HAD_KEY=0
+
+cleanup() {
+    rm -f \
+        "$CERT_TMP" \
+        "$KEY_TMP" \
+        "$CERT_BACKUP" \
+        "$KEY_BACKUP"
+}
+
+restore_previous() {
+    if [ "$HAD_CERT" -eq 1 ]; then
+        mv -f "$CERT_BACKUP" "$CERT_DEST"
+    else
+        rm -f "$CERT_DEST"
+    fi
+
+    if [ "$HAD_KEY" -eq 1 ]; then
+        mv -f "$KEY_BACKUP" "$KEY_DEST"
+    else
+        rm -f "$KEY_DEST"
+    fi
+}
+
+trap cleanup EXIT HUP INT TERM
+
+install -m 0644 "$CERT_SOURCE" "$CERT_TMP"
+install -m 0600 "$KEY_SOURCE" "$KEY_TMP"
+
+if [ -f "$CERT_DEST" ]; then
+    cp -p "$CERT_DEST" "$CERT_BACKUP"
+    HAD_CERT=1
+fi
+
+if [ -f "$KEY_DEST" ]; then
+    cp -p "$KEY_DEST" "$KEY_BACKUP"
+    HAD_KEY=1
+fi
+
+if ! mv -f "$CERT_TMP" "$CERT_DEST"; then
+    restore_previous
+    exit 1
+fi
+
+if ! mv -f "$KEY_TMP" "$KEY_DEST"; then
+    restore_previous
+    exit 1
+fi
+
+if [ -n "$("$DOCKER_BIN" ps -q --filter "name=^/${NGINX_CONTAINER}$")" ]; then
+    if ! "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -t; then
+        restore_previous
+        echo "New certificate rejected by nginx configuration test" >&2
+        exit 1
+    fi
+
+    if ! "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -s reload; then
+        restore_previous
+
+        "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -t || true
+        "$DOCKER_BIN" exec "$NGINX_CONTAINER" nginx -s reload || true
+
+        echo "Nginx reload failed; previous certificate restored" >&2
+        exit 1
+    fi
+fi

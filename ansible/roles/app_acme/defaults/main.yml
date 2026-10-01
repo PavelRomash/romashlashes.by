@@ -1,0 +1,21 @@
+---
+app_acme_package: certbot
+
+app_acme_email: ""
+app_acme_domains: []
+app_acme_cert_name: "{{ app_server_name }}"
+
+app_acme_webroot: /opt/romashlashes/certbot/www
+
+app_acme_nginx_cert_dir: /opt/romashlashes/nginx/certs
+app_acme_nginx_cert_dest: >-
+  {{ app_acme_nginx_cert_dir }}/{{ app_server_name }}.pem
+app_acme_nginx_key_dest: >-
+  {{ app_acme_nginx_cert_dir }}/{{ app_server_name }}-key.pem
+
+app_acme_nginx_container: romashlashes-nginx
+
+app_acme_deploy_hook_path: >-
+  /etc/letsencrypt/renewal-hooks/deploy/50-romashlashes-nginx
+
+app_acme_issue_certificate: false

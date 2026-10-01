@@ -1,0 +1,124 @@
+---
+- name: Validate ACME domain configuration
+  ansible.builtin.assert:
+    that:
+      - app_acme_domains | length > 0
+      - app_server_name in app_acme_domains
+    fail_msg: ACME domains must include the canonical application server name.
+
+- name: Install Certbot
+  ansible.builtin.apt:
+    name: "{{ app_acme_package }}"
+    state: present
+    update_cache: true
+
+- name: Create ACME challenge webroot
+  ansible.builtin.file:
+    path: "{{ app_acme_webroot }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create application certificate directory
+  ansible.builtin.file:
+    path: "{{ app_acme_nginx_cert_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Certbot deploy hook directory
+  ansible.builtin.file:
+    path: "{{ app_acme_deploy_hook_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Certbot deploy hook
+  ansible.builtin.template:
+    src: deploy-hook.sh.j2
+    dest: "{{ app_acme_deploy_hook_path }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Enable Certbot renewal timer
+  ansible.builtin.systemd_service:
+    name: certbot.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Check current Let's Encrypt certificate
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ app_acme_cert_name }}/fullchain.pem"
+  register: app_acme_certificate
+
+- name: Validate certificate issuance configuration
+  ansible.builtin.assert:
+    that:
+      - app_acme_email | length > 0
+    fail_msg: app_acme_email must be configured before certificate issuance.
+  when:
+    - app_acme_issue_certificate
+    - not app_acme_certificate.stat.exists
+
+- name: Test initial certificate issuance against Let's Encrypt staging
+  ansible.builtin.command:
+    argv:
+      - certbot
+      - certonly
+      - --webroot
+      - --webroot-path
+      - "{{ app_acme_webroot }}"
+      - --cert-name
+      - "{{ app_acme_cert_name }}"
+      - --domains
+      - "{{ app_acme_domains | join(',') }}"
+      - --non-interactive
+      - --agree-tos
+      - --email
+      - "{{ app_acme_email }}"
+      - --dry-run
+  changed_when: false
+  when:
+    - app_acme_issue_certificate
+    - not app_acme_certificate.stat.exists
+
+- name: Obtain initial Let's Encrypt certificate
+  ansible.builtin.command:
+    argv:
+      - certbot
+      - certonly
+      - --webroot
+      - --webroot-path
+      - "{{ app_acme_webroot }}"
+      - --cert-name
+      - "{{ app_acme_cert_name }}"
+      - --domains
+      - "{{ app_acme_domains | join(',') }}"
+      - --non-interactive
+      - --agree-tos
+      - --email
+      - "{{ app_acme_email }}"
+    creates: "/etc/letsencrypt/live/{{ app_acme_cert_name }}/fullchain.pem"
+  register: app_acme_initial_issuance
+  when:
+    - app_acme_issue_certificate
+    - not app_acme_certificate.stat.exists
+
+- name: Validate automatic renewal and deploy hook
+  ansible.builtin.command:
+    argv:
+      - certbot
+      - renew
+      - --cert-name
+      - "{{ app_acme_cert_name }}"
+      - --dry-run
+      - --run-deploy-hooks
+  changed_when: false
+  when:
+    - app_acme_initial_issuance is defined
+    - app_acme_initial_issuance is changed

@@ -21,3 +21,7 @@ app_django_secure_hsts_include_subdomains: false
 app_django_secure_hsts_preload: false
 
 app_deploy_http_port: 80
+
+app_acme_domains:
+  - "romashlashes.by"
+  - "www.romashlashes.by"

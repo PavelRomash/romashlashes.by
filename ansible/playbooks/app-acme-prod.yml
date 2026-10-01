@@ -1,0 +1,7 @@
+---
+- name: Configure public ACME TLS for PROD
+  hosts: prod
+  become: true
+
+  roles:
+    - app_acme
