@@ -268,13 +268,12 @@ deploy-prod:
     - ansible-galaxy collection install -r "$CI_PROJECT_DIR/ansible/requirements.yml"
 
     - mkdir -p ~/.ssh
-    - tr -d '\r' < "$ANSIBLE_SSH_PRIVATE_KEY" > ~/.ssh/romashlashes-ci
-    - printf '\n' >> ~/.ssh/romashlashes-ci
-    - chmod 600 ~/.ssh/romashlashes-ci
-    - ssh-keygen -y -f ~/.ssh/romashlashes-ci > /dev/null
+    - printf '%s' "$ANSIBLE_PROD_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/romashlashes-ci-prod
+    - chmod 600 ~/.ssh/romashlashes-ci-prod
+    - ssh-keygen -y -f ~/.ssh/romashlashes-ci-prod > /dev/null
     - install -m 0644 "$CI_PROJECT_DIR/ci/ssh/prod_known_hosts" ~/.ssh/known_hosts
 
-    - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci
+    - export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/romashlashes-ci-prod
     - export ANSIBLE_HOST_KEY_CHECKING=True
     - export ANSIBLE_CONFIG="$CI_PROJECT_DIR/ansible/ansible.cfg"
     - export ANSIBLE_ROLES_PATH="$CI_PROJECT_DIR/ansible/roles"
@@ -283,7 +282,7 @@ deploy-prod:
       ssh
       -o BatchMode=yes
       -o StrictHostKeyChecking=yes
-      -i ~/.ssh/romashlashes-ci
+      -i ~/.ssh/romashlashes-ci-prod
       pavel@192.168.0.183
       true
 
