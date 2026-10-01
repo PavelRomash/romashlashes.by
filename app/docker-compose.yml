@@ -63,6 +63,7 @@ services:
       - ./nginx/certs:/etc/nginx/certs:ro
       - static_volume:/app/staticfiles:ro
       - media_volume:/app/media:ro
+      - ./certbot/www:/var/www/certbot:ro
 
     restart: unless-stopped
 

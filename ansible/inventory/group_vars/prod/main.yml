@@ -1,0 +1,23 @@
+---
+app_server_name: "romashlashes.by"
+
+app_deploy_server_aliases:
+  - "www.romashlashes.by"
+
+app_django_allowed_hosts:
+  - "romashlashes.by"
+  - "www.romashlashes.by"
+  - "192.168.0.183"
+  - "localhost"
+  - "127.0.0.1"
+
+app_django_csrf_trusted_origins:
+  - "https://romashlashes.by"
+  - "https://www.romashlashes.by"
+
+
+app_django_secure_hsts_seconds: 0
+app_django_secure_hsts_include_subdomains: false
+app_django_secure_hsts_preload: false
+
+app_deploy_http_port: 80

@@ -1,13 +1,21 @@
 server {
     listen 80;
-    server_name {{ app_server_name }};
+    server_name {{ ([app_server_name] + app_deploy_server_aliases) | join(' ') }};
 
-    return 301 https://$host$request_uri;
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
 server {
     listen 443 ssl;
-    server_name {{ app_server_name }};
+    server_name {{ ([app_server_name] + app_deploy_server_aliases) | join(' ') }};
 
     ssl_certificate /etc/nginx/certs/{{ app_server_name }}.pem;
     ssl_certificate_key /etc/nginx/certs/{{ app_server_name }}-key.pem;

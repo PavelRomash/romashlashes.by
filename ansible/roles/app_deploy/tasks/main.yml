@@ -32,6 +32,14 @@
     mode: "0600"
   no_log: true
 
+- name: Create ACME challenge webroot
+  ansible.builtin.file:
+    path: "{{ app_deploy_path }}/certbot/www"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Build and start application stack
   community.docker.docker_compose_v2:
     project_src: "{{ app_deploy_path }}"
