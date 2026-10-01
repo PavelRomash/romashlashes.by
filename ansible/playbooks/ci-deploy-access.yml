@@ -1,6 +1,6 @@
 ---
 - name: Configure CI deployment SSH access
-  hosts: "dev:stage"
+  hosts: app
   become: true
 
   roles:

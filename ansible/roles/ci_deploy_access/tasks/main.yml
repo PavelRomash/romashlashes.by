@@ -10,7 +10,11 @@
 - name: Authorize GitLab CI deployment public key
   ansible.builtin.lineinfile:
     path: "/home/{{ ci_deploy_access_user }}/.ssh/authorized_keys"
-    line: "{{ lookup('ansible.builtin.file', role_path ~ '/files/romashlashes-ci-rsa.pub') }}"
+    line: >-
+      {{ lookup(
+        'ansible.builtin.file',
+        role_path ~ '/files/' ~ ci_deploy_access_public_key_filename
+      ) }}
     create: true
     owner: "{{ ci_deploy_access_user }}"
     group: "{{ ci_deploy_access_group }}"

@@ -1,3 +1,5 @@
 ---
 ci_deploy_access_user: pavel
 ci_deploy_access_group: pavel
+
+ci_deploy_access_public_key_filename: romashlashes-ci-rsa.pub
