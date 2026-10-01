@@ -22,6 +22,8 @@ app_django_secure_hsts_preload: false
 
 app_deploy_http_port: 80
 
+app_acme_email: "pavel.romash1994@mail.ru"
+
 app_acme_domains:
   - "romashlashes.by"
   - "www.romashlashes.by"
